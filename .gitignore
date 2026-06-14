@@ -1,0 +1,4 @@
+# Ignore raw HTML and generated outputs
+raw_html/
+output/
+tfrrs.db
