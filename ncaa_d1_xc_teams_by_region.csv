@@ -1,0 +1,406 @@
+Region,Team
+Great Lakes,Akron
+Great Lakes,Ball State
+Great Lakes,Bowling Green
+Great Lakes,Butler
+Great Lakes,Central Michigan
+Great Lakes,Cincinnati
+Great Lakes,Cleveland State
+Great Lakes,Dayton
+Great Lakes,Detroit Mercy
+Great Lakes,Eastern Michigan
+Great Lakes,Evansville
+Great Lakes,Indiana
+Great Lakes,Indiana State
+Great Lakes,Indiana U.-Purdue U. Indianapolis
+Great Lakes,Indianapolis
+Great Lakes,Iu Indianapolis
+Great Lakes,Iupui
+Great Lakes,Kent State
+Great Lakes,Marquette
+Great Lakes,Miami (Ohio)
+Great Lakes,Michigan
+Great Lakes,Michigan State
+Great Lakes,Milwaukee
+Great Lakes,Notre Dame
+Great Lakes,Oakland
+Great Lakes,Ohio
+Great Lakes,Ohio State
+Great Lakes,Purdue
+Great Lakes,Purdue Fort Wayne
+Great Lakes,Southern Indiana
+Great Lakes,Toledo
+Great Lakes,Valparaiso
+Great Lakes,Western Michigan
+Great Lakes,Wis Green Bay
+Great Lakes,Wis.-Green Bay
+Great Lakes,Wis.-green Bay
+Great Lakes,Wisconsin
+Great Lakes,Wisconsin Milwaukee
+Great Lakes,Wright St.
+Great Lakes,Wright State
+Great Lakes,Xavier
+Great Lakes,Xavier (Ohio)
+Great Lakes,Youngstown St.
+Mid-Atlantic,American
+Mid-Atlantic,Bucknell
+Mid-Atlantic,Coppin State
+Mid-Atlantic,Delaware
+Mid-Atlantic,Delaware State
+Mid-Atlantic,Duquesne
+Mid-Atlantic,Fdu
+Mid-Atlantic,George Washington
+Mid-Atlantic,Georgetown
+Mid-Atlantic,Howard
+Mid-Atlantic,La Salle
+Mid-Atlantic,Lafayette
+Mid-Atlantic,Lehigh
+Mid-Atlantic,Loyola (Md.)
+Mid-Atlantic,Marshall
+Mid-Atlantic,Maryland
+Mid-Atlantic,Maryland-Eastern Shore
+Mid-Atlantic,Mercyhurst
+Mid-Atlantic,Monmouth
+Mid-Atlantic,Morgan State
+Mid-Atlantic,Mount St. Mary'S
+Mid-Atlantic,Navy
+Mid-Atlantic,Njit
+Mid-Atlantic,Penn
+Mid-Atlantic,Penn State
+Mid-Atlantic,Pittsburgh
+Mid-Atlantic,Princeton
+Mid-Atlantic,Rider
+Mid-Atlantic,Robert Morris
+Mid-Atlantic,Rutgers
+Mid-Atlantic,Saint Joseph'S University
+Mid-Atlantic,Seton Hall
+Mid-Atlantic,St. Francis (pa.)
+Mid-Atlantic,St. Joseph's
+Mid-Atlantic,St. Peter'S
+Mid-Atlantic,St. Peter's
+Mid-Atlantic,Temple
+Mid-Atlantic,Towson
+Mid-Atlantic,Umbc
+Mid-Atlantic,Villanova
+Mid-Atlantic,West Virginia
+Midwest,Bradley
+Midwest,Chicago State
+Midwest,Creighton
+Midwest,Depaul
+Midwest,Drake
+Midwest,Eastern Illinois
+Midwest,Illinois
+Midwest,Illinois Chicago
+Midwest,Illinois State
+Midwest,Illinois-Chicago
+Midwest,Iowa
+Midwest,Iowa State
+Midwest,Kansas
+Midwest,Kansas City
+Midwest,Kansas State
+Midwest,Lindenwood
+Midwest,Loyola (Ill.)
+Midwest,Loyola (ill.)
+Midwest,Minnesota
+Midwest,Missouri
+Midwest,Missouri St.
+Midwest,Nebraska
+Midwest,North Dakota
+Midwest,North Dakota State
+Midwest,Northern Illinois
+Midwest,Northern Iowa
+Midwest,Northwestern
+Midwest,Oklahoma
+Midwest,Oklahoma State
+Midwest,Omaha
+Midwest,Oral Roberts
+Midwest,Saint Louis
+Midwest,Se Missouri
+Midwest,Siu Edwardsville
+Midwest,South Dakota
+Midwest,South Dakota St.
+Midwest,Southern Ill.
+Midwest,Southern Illinois
+Midwest,St. Louis
+Midwest,St. Thomas (minn.)
+Midwest,St. Thomas (Minn.)
+Midwest,Tulsa
+Midwest,Western Illinois
+Midwest,Wichita State
+Mountain,Air Force
+Mountain,Byu
+Mountain,Colorado
+Mountain,Colorado St.
+Mountain,Idaho State
+Mountain,Montana
+Mountain,Montana State
+Mountain,Nevada
+Mountain,New Mexico
+Mountain,New Mexico St.
+Mountain,New Mexico State
+Mountain,Northern Arizona
+Mountain,Northern Colo.
+Mountain,Northern Colorado
+Mountain,Southern Utah
+Mountain,Texas Tech
+Mountain,Texas-el Paso
+Mountain,Utah
+Mountain,Utah State
+Mountain,Utah Valley
+Mountain,Utep
+Mountain,Weber State
+Mountain,Wyoming
+Northeast,Army West Point
+Northeast,Binghamton
+Northeast,Boston College
+Northeast,Boston University
+Northeast,Brown
+Northeast,Bryant
+Northeast,Buffalo
+Northeast,Canisius
+Northeast,Central Connecticut
+Northeast,Colgate
+Northeast,Columbia
+Northeast,Connecticut
+Northeast,Cornell
+Northeast,Dartmouth
+Northeast,Fairfield
+Northeast,Fordham
+Northeast,Hartford
+Northeast,Harvard
+Northeast,Hofstra
+Northeast,Holy Cross
+Northeast,Iona
+Northeast,Le Moyne C (NY)
+Northeast,Liu
+Northeast,Liu Brooklyn
+Northeast,Long Island
+Northeast,Maine
+Northeast,Manhattan
+Northeast,Marist
+Northeast,Merrimack
+Northeast,New Hampshire
+Northeast,Niagara
+Northeast,Northeastern
+Northeast,Providence
+Northeast,Quinnipiac
+Northeast,Rhode Island
+Northeast,Sacred Heart
+Northeast,Siena
+Northeast,St. Bonaventure
+Northeast,St. Francis Brooklyn
+Northeast,St. John's (N.Y.)
+Northeast,Stonehill
+Northeast,Stony Brook
+Northeast,Syracuse
+Northeast,Ualbany
+Northeast,Umass Amherst
+Northeast,Umass Lowell
+Northeast,Vermont
+Northeast,Wagner
+Northeast,Yale
+South,Alabama
+South,Alabama A&M
+South,Alabama State
+South,Alcorn State
+South,Auburn
+South,Austin Peay
+South,Belmont
+South,Bethune-Cookman
+South,Chattanooga
+South,East Tenn. St.
+South,Etsu
+South,Fiu
+South,Fla. Atlantic
+South,Fla. Gulf Coast
+South,Fla. International
+South,Florida
+South,Florida A&M
+South,Florida Atlantic
+South,Florida Gulf Coast
+South,Florida State
+South,Ga. Southern
+South,Ga. State
+South,Georgia
+South,Georgia Tech
+South,Jackson State
+South,Jacksonville
+South,Jacksonville St.
+South,Kennesaw State
+South,Lipscomb
+South,Memphis
+South,Mercer
+South,Miami (Fla.)
+South,Middle Tenn.
+South,Middle Tennessee
+South,Miss State
+South,Mississippi Val.
+South,Mississippi Valley
+South,North Alabama
+South,North Florida
+South,Ole Miss
+South,Samford
+South,Savannah State
+South,South Alabama
+South,South Florida
+South,Southern Miss.
+South,Stetson
+South,Tennessee
+South,Tennessee St.
+South,Tennessee Tech
+South,Troy
+South,UAB
+South,UCF
+South,Ut Martin
+South,Vanderbilt
+South,West Georgia
+South Central,Abilene Christian
+South Central,Arkansas
+South Central,Arkansas State
+South Central,Arkansas-Pine Bluff
+South Central,Baylor
+South Central,Centenary (La.)
+South Central,Central Arkansas
+South Central,East Texas A&M
+South Central,Grambling
+South Central,Houston
+South Central,Houston Christian
+South Central,Incarnate Word
+South Central,Lamar
+South Central,Little Rock
+South Central,Louisiana
+South Central,Louisiana Tech
+South Central,Lsu
+South Central,Mcneese State
+South Central,New Orleans
+South Central,Nicholls State
+South Central,North Texas
+South Central,Northwestern St.
+South Central,Prairie View
+South Central,Rice
+South Central,Sam Houston
+South Central,Se Louisiana
+South Central,SMU
+South Central,Southern
+South Central,Stephen F. Austin
+South Central,Tarleton State
+South Central,Tcu
+South Central,Texas
+South Central,Texas A&m
+South Central,Texas A&M
+South Central,Texas A&M-Cc
+South Central,Texas A&m-corpus Christi
+South Central,Texas Southern
+South Central,Texas State
+South Central,Texas-arlington
+South Central,Texas-rio Grande Valley
+South Central,Texas-san Antonio
+South Central,Tulane
+South Central,Ulm
+South Central,Ut-Arlington
+South Central,Ut-Rio Grande Valley
+South Central,Utsa
+Southeast,App State
+Southeast,Bellarmine
+Southeast,Campbell
+Southeast,Charleston Southern
+Southeast,Charlotte
+Southeast,Clemson
+Southeast,Coastal Carolina
+Southeast,Col. Of Charleston
+Southeast,Davidson
+Southeast,Duke
+Southeast,East Carolina
+Southeast,Eastern Kentucky
+Southeast,Elon
+Southeast,Furman
+Southeast,Gardner-webb
+Southeast,George Mason
+Southeast,Hampton
+Southeast,High Point
+Southeast,James Madison
+Southeast,Kentucky
+Southeast,Liberty
+Southeast,Longwood
+Southeast,Louisville
+Southeast,Morehead St.
+Southeast,Morehead State
+Southeast,Murray St.
+Southeast,Murray State
+Southeast,N.C. Central
+Southeast,N.c. State
+Southeast,N.c. Wilmington
+Southeast,Nc State
+Southeast,Norfolk State
+Southeast,North Carolina
+Southeast,North Carolina A&T
+Southeast,Northern Kentucky
+Southeast,Northern Ky.
+Southeast,Presbyterian
+Southeast,Queens (N.C.)
+Southeast,Radford
+Southeast,Richmond
+Southeast,Sc State
+Southeast,South Carolina
+Southeast,South Carolina State
+Southeast,The Citadel
+Southeast,Unc Asheville
+Southeast,Unc Wilmington
+Southeast,Unc-Asheville
+Southeast,Unc-Greensboro
+Southeast,Usc Upstate
+Southeast,VCU
+Southeast,Virginia
+Southeast,Virginia Tech
+Southeast,VMI
+Southeast,Wake Forest
+Southeast,Western Carolina
+Southeast,Western Kentucky
+Southeast,William & Mary
+Southeast,Winthrop
+Southeast,Wofford
+West,Arizona
+West,Arizona State
+West,Boise State
+West,Cal Poly
+West,Cal St. Fullerton
+West,California
+West,Cbu
+West,CSU Bakersfield
+West,Csun
+West,Eastern Washington
+West,Fresno State
+West,Gonzaga
+West,Grand Canyon
+West,Hawai'i
+West,Idaho
+West,Long Beach St.
+West,Loyola Marymount
+West,Oregon
+West,Oregon State
+West,Pacific
+West,Pepperdine
+West,Portland
+West,Portland St.
+West,Portland State
+West,Sacramento St.
+West,San Diego
+West,San Diego St.
+West,San Francisco
+West,San Jose St.
+West,Santa Clara
+West,Seattle U.
+West,Southern California
+West,St. Mary'S (Cal.)
+West,Stanford
+West,Uc Davis
+West,Uc Irvine
+West,Uc Riverside
+West,Uc San Diego
+West,Uc Santa Barbara
+West,Ucla
+West,UNLV
+West,Utah Tech
+West,Washington
+West,Washington St.
+West,Washington State

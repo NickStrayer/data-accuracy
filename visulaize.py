@@ -33,6 +33,9 @@ import sqlite3
 import webbrowser
 from pathlib import Path
 
+from analyze_progression import FOCUS_CODES
+from event_bounds import sql_plausible_time_where
+
 DB_PATH     = Path(__file__).parent / "tfrrs.db"
 OUTPUT_PATH = Path(__file__).parent / "output" / "dashboard.html"
 
@@ -75,6 +78,8 @@ def load_data() -> dict:
     }
 
     codes_sql = _sql_in(FOCUS_EVENT_CODES)
+    bounds_sql = sql_plausible_time_where("r", FOCUS_CODES)
+    bounds_sql_plain = sql_plausible_time_where("", FOCUS_CODES)
 
     # Progression stats from DB (focus events only)
     try:
@@ -91,6 +96,7 @@ def load_data() -> dict:
                    discounted_p10, discounted_p25, discounted_p75, discounted_p90
             FROM progression_stats
             WHERE event_code IN ({codes_sql})
+              AND from_class != 'ALL'
             ORDER BY event_code, gender, from_class
         """)
     except sqlite3.OperationalError:
@@ -104,6 +110,7 @@ def load_data() -> dict:
                    p10, p25, p75, p90
             FROM progression_stats
             WHERE event_code IN ({codes_sql})
+              AND from_class != 'ALL'
             ORDER BY event_code, gender, from_class
         """)
 
@@ -116,6 +123,7 @@ def load_data() -> dict:
             JOIN athletes a ON a.athlete_id = r.athlete_id
             WHERE r.event_code IN ({codes_sql})
               AND r.time_seconds IS NOT NULL AND r.time_seconds > 0
+              AND {bounds_sql}
             GROUP BY r.athlete_id, r.season_year, r.event_code, a.gender
         ),
         ranked AS (
@@ -170,6 +178,7 @@ def load_data() -> dict:
                COUNT(DISTINCT athlete_id) AS n_athletes
         FROM results
         WHERE event_code IN ({codes_sql})
+          AND {bounds_sql_plain}
         GROUP BY event_code
         ORDER BY n_results DESC
     """)
@@ -202,9 +211,9 @@ def load_data() -> dict:
     # Monte Carlo predictor data (built by predict_montecarlo.py)
     mc = _load_json("montecarlo_data.json")
     data["mc"] = {
-        "athletes":                  mc.get("athletes", {}),
-        "improvement_distributions": {
-            k: v for k, v in mc.get("improvement_distributions", {}).items()
+        "athletes":                 mc.get("athletes", {}),
+        "transition_distributions": {
+            k: v for k, v in mc.get("transition_distributions", {}).items()
             if k in FOCUS_EVENT_CODES
         },
         "percentile_benchmarks": {
@@ -226,6 +235,7 @@ def load_data() -> dict:
 
 def generate_html(data: dict) -> str:
     # BUG-11 fixed: escape </script> inside embedded JSON
+    current_season = data.get("mc", {}).get("current_season", 2026)
     d = json.dumps(data, default=str).replace("</script>", r"<\/script>")
 
     return f"""<!DOCTYPE html>
@@ -844,16 +854,36 @@ def generate_html(data: dict) -> str:
 <!-- ══════ TAB 7 — VOLUME ══════ -->
 <div class="tab-pane" id="tab-predictor">
   <div class="section-title">Field <span>Predictor</span></div>
-  <p style="color:var(--muted);margin-bottom:8px;font-size:13px;">
-    Select a <strong>conference or region</strong>, <strong>event</strong>, and <strong>target finish</strong>
-    (e.g. top 1, top 6). Then search for an athlete to focus on.
-    The simulator runs <strong>10,000 Monte Carlo seasons</strong> — each athlete in the field
-    independently draws a random improvement (or regression) from their own historical decile
-    distribution, producing a simulated finishing order. The result is a probability distribution
-    over finishing places for your chosen athlete.
-  </p>
+
+  <div style="margin-bottom:16px;padding:12px 14px;border:1px solid var(--border);border-left:3px solid var(--accent);
+              border-radius:8px;background:var(--surface);font-size:13px;line-height:1.55;">
+    <p style="margin:0 0 8px;color:var(--text);">
+      Uses all historical year-over-year progression statistics to project how athletes' season
+      bests will progress, then ranks outcomes on both an individual and
+      XC team level within the selected conference or region. Each athlete is simulated using tier and class-specific transition rates.
+    </p>
+    <p style="margin:0 0 8px;color:var(--muted);font-size:12px;">
+      <strong style="color:var(--text);">What this does:</strong>
+      accounts for different progression by tier  and
+      class year; uses each athlete's {current_season} season best
+      as the starting benchmark; ranks projected outcomes within the selected conference or XC region.
+      Individualmode projects any track or distance event (including XC).
+      XC Team mode  — all men's XC is modeled as 8K;
+      .
+    </p>
+    <p style="margin:0;color:var(--muted);font-size:12px;">
+      <strong style="color:var(--text);">What this does not do:</strong>
+      account for incoming freshmen, transfers, injuries, or roster departures (only returning
+      FR/SO/JR with a current-season mark in the database); factor in championship variability,
+      consistency, or tactics; predict mid-season growth — season best to season best only.
+    </p>
+  </div>
 
   <div class="controls" style="flex-wrap:wrap;gap:10px;">
+    <div class="btn-group">
+      <button id="pred-mode-ind-btn" class="active" onclick="setPredMode('individual')">Individual</button>
+      <button id="pred-mode-team-btn"                onclick="setPredMode('team')">XC Team</button>
+    </div>
     <select id="pred-scope-type" onchange="predScopeChanged()">
       <option value="conference">Conference</option>
       <option value="xc_region">XC Region</option>
@@ -864,32 +894,48 @@ def generate_html(data: dict) -> str:
       <button id="pred-m-btn" class="active" onclick="setPredGender('M')">Men</button>
       <button id="pred-f-btn"               onclick="setPredGender('F')">Women</button>
     </div>
-    <select id="pred-transition">
-      <option value="FR_to_SO">FR → SO</option>
-      <option value="SO_to_JR">SO → JR</option>
-      <option value="JR_to_SR" selected>JR → SR</option>
-    </select>
   </div>
 
-  <div style="margin:14px 0 6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-    <input type="text" id="pred-athlete-search" placeholder="Search athlete name..."
-           style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);
-                  background:var(--surface2);color:var(--text);font-size:13px;width:240px;"
-           oninput="predAthleteSearch(this.value)">
+  <div id="pred-individual-extra">
+    <div style="margin:14px 0 6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <input type="text" id="pred-athlete-search" placeholder="Search athlete name..."
+             style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);
+                    background:var(--surface2);color:var(--text);font-size:13px;width:240px;"
+             oninput="predAthleteSearch(this.value)">
+    </div>
+
+    <!-- Athlete dropdown from search -->
+    <div id="pred-athlete-list" style="display:none;max-height:200px;overflow-y:auto;
+         border:1px solid var(--border);border-radius:6px;background:var(--surface2);
+         margin-bottom:12px;font-size:13px;"></div>
+
+    <!-- Chosen athlete card -->
+    <div id="pred-chosen-card" style="display:none;margin-bottom:14px;padding:10px 14px;
+         border:1px solid var(--accent);border-radius:8px;background:var(--surface);font-size:13px;">
+    </div>
+  </div>
+
+  <div id="pred-team-extra" style="display:none;margin:14px 0 6px;">
+    <p id="pred-team-event-note" style="font-size:13px;color:var(--muted);margin-bottom:8px;"></p>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+      <input type="text" id="pred-team-search" placeholder="Search school / team name..."
+             style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);
+                    background:var(--surface2);color:var(--text);font-size:13px;width:240px;"
+             oninput="predTeamSearch(this.value)">
+    </div>
+    <div id="pred-team-list" style="display:none;max-height:200px;overflow-y:auto;
+         border:1px solid var(--border);border-radius:6px;background:var(--surface2);
+         margin-bottom:12px;font-size:13px;"></div>
+    <div id="pred-chosen-team-card" style="display:none;margin-bottom:14px;padding:10px 14px;
+         border:1px solid var(--accent);border-radius:8px;background:var(--surface);font-size:13px;">
+    </div>
+  </div>
+
+  <div style="margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
     <span id="pred-field-count" style="font-size:12px;color:var(--muted);"></span>
     <span id="pred-sims-label"  style="font-size:12px;color:var(--muted);margin-left:auto;">
       10,000 simulations
     </span>
-  </div>
-
-  <!-- Athlete dropdown from search -->
-  <div id="pred-athlete-list" style="display:none;max-height:200px;overflow-y:auto;
-       border:1px solid var(--border);border-radius:6px;background:var(--surface2);
-       margin-bottom:12px;font-size:13px;"></div>
-
-  <!-- Chosen athlete card -->
-  <div id="pred-chosen-card" style="display:none;margin-bottom:14px;padding:10px 14px;
-       border:1px solid var(--accent);border-radius:8px;background:var(--surface);font-size:13px;">
   </div>
 
   <!-- Run button -->
@@ -905,29 +951,74 @@ def generate_html(data: dict) -> str:
 
   <!-- Results -->
   <div id="pred-results" style="display:none;">
-    <div class="grid-2" style="margin-bottom:20px;">
-      <div class="card">
-        <div class="card-title">Finishing Place Distribution</div>
-        <div class="chart-wrap tall"><canvas id="chart-pred-places"></canvas></div>
+    <div id="pred-focused-section">
+      <div class="grid-2" style="margin-bottom:20px;">
+        <div class="card">
+          <div class="card-title">Finishing Place Distribution</div>
+          <div class="chart-wrap tall"><canvas id="chart-pred-places"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Cumulative Probability</div>
+          <div class="chart-wrap tall"><canvas id="chart-pred-cumul"></canvas></div>
+        </div>
       </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title">Key Probabilities</div>
+        <div id="pred-prob-table"></div>
+      </div>
+
       <div class="card">
-        <div class="card-title">Cumulative Probability</div>
-        <div class="chart-wrap tall"><canvas id="chart-pred-cumul"></canvas></div>
+        <div class="card-title" id="pred-summary-title">Athlete Simulation Summary</div>
+        <div id="pred-athlete-summary"></div>
+      </div>
+
+      <div class="card" id="pred-team-roster-card" style="display:none;margin-top:16px;">
+        <div class="card-title">Team Roster — Simulated Outcomes</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">
+          Individual outcomes for athletes on the selected team. Scorer % = share of simulations
+          where the athlete counted toward the team's top-5 score.
+        </p>
+        <div id="pred-team-roster"></div>
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:16px;">
-      <div class="card-title">Key Probabilities</div>
-      <div id="pred-prob-table"></div>
+    <div id="pred-field-section">
+      <div class="card" style="margin-bottom:16px;" id="pred-top-winners-card">
+        <div class="card-title">Top Projected Winners</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">
+          Athletes most likely to win across all 10,000 simulations (no focused athlete selected).
+        </p>
+        <div id="pred-top-winners"></div>
+      </div>
+
+      <div class="card" id="pred-field-table-card">
+        <div class="card-title">Simulated Field — Median Outcomes</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">
+          Each athlete's median simulated time across all 10,000 runs, sorted by median finish.
+        </p>
+        <div id="pred-field-table"></div>
+      </div>
     </div>
 
-    <div class="card">
-      <div class="card-title">Simulated Field — Median Outcomes</div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">
-        Each athlete's median simulated time across all 10,000 runs,
-        sorted by median finish. Grey = no historical distribution found (time held fixed).
-      </p>
-      <div id="pred-field-table"></div>
+    <div id="pred-team-results" style="display:none;">
+      <div class="card" style="margin-bottom:16px;" id="pred-top-teams-card">
+        <div class="card-title">Top Projected Team Champions</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">
+          Teams most likely to win (lowest score = sum of top-5 individual places).
+        </p>
+        <div id="pred-top-teams"></div>
+      </div>
+
+      <div class="card" id="pred-team-table-card">
+        <div class="card-title">Team Rankings — Average Outcomes</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">
+          NCAA-style scoring: each team's score is the sum of its top 5 individual finish places
+          (lower is better). Teams need at least 5 athletes in the field to score.
+          P10 / P90 = top- and bottom-10% outcomes across all simulations (not single-run extremes).
+        </p>
+        <div id="pred-team-table"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1018,7 +1109,9 @@ function firstEventKey(obj, event) {{
 }}
 function rowsForEvent(dataset, event, gender) {{
   for (const code of eventCandidates(event)) {{
-    const rows = (dataset || []).filter(r => r.event_code === code && r.gender === gender);
+    const rows = (dataset || []).filter(r =>
+      r.event_code === code && r.gender === gender && r.from_class !== 'ALL'
+    );
     if (rows.length) return rows;
   }}
   return [];
@@ -1091,13 +1184,48 @@ function showTab(name, btn) {{
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let predGender      = 'M';
+let predMode        = 'individual'; // 'individual' | 'team'
 let predInitialized = false;
-let predChosenId    = null;   // athlete_id string
-let predLastResult  = null;   // most recent simulation output
+let predChosenId     = null;
+let predChosenSchool = null;
+let predLastResult   = null;
 
-const N_SIMS = 10_000;
+const N_SIMS = 10000;
+const PRED_XC_TEAM_EVENT = {{ M: '8K_XC', F: '6K_XC' }};
+const PRED_TEAM_SCORERS  = 5;
+const PRED_TEAM_TOP_PLACE = 3;  // individual top-N finish rate on team roster / team rank table
 
 const PRED_TRANS_NEXT = {{ FR: 'SO', SO: 'JR', JR: 'SR' }};
+const PRED_ELIGIBLE_CLASSES = ['FR', 'SO', 'JR'];
+const PRED_TRANSITION_FOR_CLASS = {{ FR: 'FR_to_SO', SO: 'SO_to_JR', JR: 'JR_to_SR' }};
+
+function predGetEventCode() {{
+  if (predMode === 'team') return PRED_XC_TEAM_EVENT[predGender] || '8K_XC';
+  return document.getElementById('pred-event').value;
+}}
+
+function setPredMode(mode) {{
+  predMode = mode;
+  document.getElementById('pred-mode-ind-btn').classList.toggle('active', mode === 'individual');
+  document.getElementById('pred-mode-team-btn').classList.toggle('active', mode === 'team');
+  document.getElementById('pred-individual-extra').style.display = mode === 'individual' ? 'block' : 'none';
+  document.getElementById('pred-team-extra').style.display       = mode === 'team' ? 'block' : 'none';
+  document.getElementById('pred-event').style.display            = mode === 'individual' ? '' : 'none';
+  predUpdateTeamNote();
+  predFieldChanged();
+}}
+
+function predUpdateTeamNote() {{
+  const code = PRED_XC_TEAM_EVENT[predGender] || '8K_XC';
+  const el = document.getElementById('pred-team-event-note');
+  if (!el) return;
+  el.textContent =
+    `Event locked to ${{EVENT_LABELS[code] || code}}`
+    + (predGender === 'M' ? ' (all men\\'s XC is 8K)' : ' (women\\'s XC is 6K)')
+    + `. Team score = sum of each school's top `
+    + `${{PRED_TEAM_SCORERS}} individual places (lower is better). `
+    + `Search for a school to focus on team charts and summary.`;
+}}
 
 // ── Initialise tab (called once on first reveal) ──────────────────────────────
 function initPredictor() {{
@@ -1119,6 +1247,7 @@ function initPredictor() {{
     evSel.appendChild(opt);
   }});
 
+  predUpdateTeamNote();
   predFieldChanged();
 }}
 
@@ -1137,6 +1266,7 @@ function setPredGender(g) {{
   predGender = g;
   document.getElementById('pred-m-btn').classList.toggle('active', g === 'M');
   document.getElementById('pred-f-btn').classList.toggle('active', g === 'F');
+  predUpdateTeamNote();
   predFieldChanged();
 }}
 
@@ -1146,42 +1276,63 @@ function predGetField() {{
   const athletes   = mc.athletes || {{}};
   const scope      = document.getElementById('pred-scope-type').value;
   const scopeVal   = document.getElementById('pred-scope-value').value;
-  const event_code = document.getElementById('pred-event').value;
-  const transition = document.getElementById('pred-transition').value;
-  const fromClass  = transition.split('_to_')[0];
+  const event_code = predGetEventCode();
 
   return Object.entries(athletes)
-    .filter(([id, a]) => {
+    .filter(([id, a]) => {{
       if (a.gender !== predGender)         return false;
-      if (a.class_year !== fromClass)      return false;
+      if (!PRED_ELIGIBLE_CLASSES.includes(a.class_year)) return false;
       if (!a.events[event_code])           return false;
       if (scope === 'conference' && a.conference !== scopeVal) return false;
       if (scope === 'xc_region'  && a.xc_region  !== scopeVal) return false;
       return true;
-    })
+    }})
     .map(([id, a]) => ({{
       id,
       name:       a.name,
       school:     a.school,
       class_year: a.class_year,
+      transition: PRED_TRANSITION_FOR_CLASS[a.class_year] || null,
       best_time:  a.events[event_code].best_time,
       decile:     a.events[event_code].decile ?? null,
     }}))
     .sort((a, b) => a.best_time - b.best_time);
 }}
 
+function predFieldSummary(field) {{
+  if (!field.length) return 'No athletes found for this selection';
+  if (predMode === 'team') {{
+    const bySchool = {{}};
+    field.forEach(a => {{ (bySchool[a.school] = bySchool[a.school] || []).push(a); }});
+    const schools = Object.keys(bySchool).length;
+    const scoring = Object.values(bySchool).filter(m => m.length >= PRED_TEAM_SCORERS).length;
+    return `${{field.length}} athletes · ${{schools}} schools · ${{scoring}} teams with ${{PRED_TEAM_SCORERS}}+ scorers`;
+  }}
+  const byClass = PRED_ELIGIBLE_CLASSES.map(c =>
+    `${{c}}: ${{field.filter(a => a.class_year === c).length}}`
+  ).join(' · ');
+  return `${{field.length}} athletes in field (${{byClass}})`;
+}}
+
 function predFieldChanged() {{
   const field = predGetField();
-  const countEl = document.getElementById('pred-field-count');
-  countEl.textContent = field.length ? `${{field.length}} athletes in field` : 'No athletes found for this selection';
+  document.getElementById('pred-field-count').textContent = predFieldSummary(field);
 
   // Clear prior results
   document.getElementById('pred-results').style.display = 'none';
+  document.getElementById('pred-team-results').style.display = 'none';
   predLastResult = null;
-  predChosenId = null;
-  document.getElementById('pred-chosen-card').style.display = 'none';
-  document.getElementById('pred-athlete-search').value = '';
-  document.getElementById('pred-athlete-list').style.display = 'none';
+  if (predMode === 'individual') {{
+    predChosenId = null;
+    document.getElementById('pred-chosen-card').style.display = 'none';
+    document.getElementById('pred-athlete-search').value = '';
+    document.getElementById('pred-athlete-list').style.display = 'none';
+  }} else {{
+    predChosenSchool = null;
+    document.getElementById('pred-chosen-team-card').style.display = 'none';
+    document.getElementById('pred-team-search').value = '';
+    document.getElementById('pred-team-list').style.display = 'none';
+  }}
 }}
 
 // ── Athlete search ────────────────────────────────────────────────────────────
@@ -1215,7 +1366,7 @@ function predSelectAthlete(id) {{
 
   const mc  = DATA.mc || {{}};
   const ath = mc.athletes[id];
-  const event_code = document.getElementById('pred-event').value;
+  const event_code = predGetEventCode();
   const ev  = ath.events[event_code];
 
   const card = document.getElementById('pred-chosen-card');
@@ -1232,21 +1383,113 @@ function predSelectAthlete(id) {{
   card.style.display = 'block';
 }}
 
-// ── Monte Carlo engine ────────────────────────────────────────────────────────
-function getImprovementDistribution(event_code, transition) {{
-  const dists = (DATA.mc || {{}}).improvement_distributions || {{}};
-  const block = dists[event_code]?.[predGender]?.[transition];
-  return block || null;
+function predGetScoringSchools(field) {{
+  const bySchool = {{}};
+  field.forEach(a => {{
+    const sch = a.school || 'Unknown';
+    (bySchool[sch] = bySchool[sch] || []).push(a);
+  }});
+  return Object.keys(bySchool)
+    .filter(s => bySchool[s].length >= PRED_TEAM_SCORERS)
+    .sort();
 }}
 
-function sampleImprovement(decile, block) {{
-  // Pick the per-decile array if it has enough samples, else fall back to "all"
-  const arr = (decile && block[String(decile)] && block[String(decile)].length >= 5)
-    ? block[String(decile)]
-    : block['all'];
-  if (!arr || !arr.length) return 0;
-  // Uniform random draw from the empirical distribution
+function predTeamSearch(q) {{
+  const listEl = document.getElementById('pred-team-list');
+  if (!q || q.length < 2) {{ listEl.style.display = 'none'; return; }}
+
+  const schools = predGetScoringSchools(predGetField());
+  const ql = q.toLowerCase();
+  const hits = schools.filter(s => s.toLowerCase().includes(ql)).slice(0, 10);
+
+  if (!hits.length) {{ listEl.style.display = 'none'; return; }}
+
+  const field = predGetField();
+  listEl.innerHTML = hits.map(school => {{
+    const n = field.filter(a => a.school === school).length;
+    return `<div onclick='predSelectTeam(${{JSON.stringify(school)}})'
+          style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);"
+          onmouseover="this.style.background='var(--surface)'"
+          onmouseout="this.style.background=''">
+      <strong>${{school}}</strong>
+      <span style="color:var(--muted);font-size:11px;margin-left:8px;">${{n}} athletes</span>
+    </div>`;
+  }}).join('');
+  listEl.style.display = 'block';
+}}
+
+function predSelectTeam(school) {{
+  predChosenSchool = school;
+  document.getElementById('pred-team-list').style.display = 'none';
+
+  const field = predGetField();
+  const n = field.filter(a => a.school === school).length;
+  const event_code = predGetEventCode();
+
+  const card = document.getElementById('pred-chosen-team-card');
+  card.innerHTML = `
+    <strong style="font-size:14px;">${{school}}</strong>
+    <span style="color:var(--muted);font-size:12px;margin-left:10px;">
+      ${{n}} athletes · ${{EVENT_LABELS[event_code] || event_code}}
+    </span>`;
+  card.style.display = 'block';
+}}
+
+// ── Monte Carlo engine ────────────────────────────────────────────────────────
+function getTransitionBlock(event_code, transition) {{
+  const dists = (DATA.mc || {{}}).transition_distributions || {{}};
+  return dists[event_code]?.[predGender]?.[transition] || null;
+}}
+
+function getTransitionBlockForAthlete(event_code, class_year) {{
+  const transition = PRED_TRANSITION_FOR_CLASS[class_year];
+  return transition ? getTransitionBlock(event_code, transition) : null;
+}}
+
+function sampleEndingDecile(fromDecile, matrix) {{
+  const row = matrix?.[String(fromDecile)];
+  if (!row) return null;
+  const entries = Object.entries(row).filter(([, p]) => p > 0);
+  if (!entries.length) return null;
+  const r = Math.random();
+  let cum = 0;
+  for (const [decile, p] of entries) {{
+    cum += p;
+    if (r <= cum) return Number(decile);
+  }}
+  return Number(entries[entries.length - 1][0]);
+}}
+
+function pickRandom(arr) {{
   return arr[Math.floor(Math.random() * arr.length)];
+}}
+
+function sampleImprovement(fromDecile, block) {{
+  if (!block) return 0;
+
+  // Match the Tier Transitions matrix: sample an ending decile for this starting
+  // decile, then sample a real historical improvement from that start→end cell.
+  if (fromDecile != null && block.matrix && block.improvements_by_cell) {{
+    const fromKey = String(fromDecile);
+    const toDecile = sampleEndingDecile(fromDecile, block.matrix);
+    if (toDecile != null) {{
+      const cell = block.improvements_by_cell[fromKey]?.[String(toDecile)];
+      if (cell && cell.length >= 3) return pickRandom(cell);
+    }}
+    // Row fallback: any ending decile this starting group actually reached.
+    const rowPool = [];
+    const rowCells = block.improvements_by_cell[fromKey] || {{}};
+    for (const arr of Object.values(rowCells)) {{
+      if (arr?.length) rowPool.push(...arr);
+    }}
+    if (rowPool.length >= 5) return pickRandom(rowPool);
+  }}
+
+  // Last resort: all improvements for this starting decile (still decile-scoped).
+  const fromPool = block.improvements_by_from_decile?.[String(fromDecile)];
+  if (fromPool?.length >= 5) return pickRandom(fromPool);
+
+  return 0;
 }}
 
 function applyImprovement(time_sec, imp_pct) {{
@@ -1254,21 +1497,175 @@ function applyImprovement(time_sec, imp_pct) {{
   return time_sec * (1 - imp_pct / 100);
 }}
 
+function predSimTimes(field, event_code) {{
+  return field.map(ath => {{
+    const block = getTransitionBlockForAthlete(event_code, ath.class_year);
+    if (!block) return ath.best_time;
+    const imp = sampleImprovement(ath.decile, block);
+    return applyImprovement(ath.best_time, imp);
+  }});
+}}
+
+function predRankTeams(field, simTimes) {{
+  const places = new Array(field.length);
+  const order = simTimes
+    .map((t, i) => ({{ t, i }}))
+    .sort((a, b) => a.t - b.t);
+  order.forEach((item, rank) => {{ places[item.i] = rank + 1; }});
+
+  const bySchool = {{}};
+  field.forEach((ath, i) => {{
+    const sch = ath.school || 'Unknown';
+    if (!bySchool[sch]) bySchool[sch] = [];
+    bySchool[sch].push({{ place: places[i] }});
+  }});
+
+  const teams = [];
+  for (const [school, members] of Object.entries(bySchool)) {{
+    if (members.length < PRED_TEAM_SCORERS) continue;
+    members.sort((a, b) => a.place - b.place);
+    const top5 = members.slice(0, PRED_TEAM_SCORERS);
+    teams.push({{
+      school,
+      nScorers: members.length,
+      score: top5.reduce((s, m) => s + m.place, 0),
+    }});
+  }}
+
+  teams.sort((a, b) => a.score - b.score);
+  let rank = 0;
+  for (let i = 0; i < teams.length; i++) {{
+    if (i === 0 || teams[i].score !== teams[i - 1].score) rank = i + 1;
+    teams[i].teamPlace = rank;
+  }}
+  return teams;
+}}
+
 function runMonteCarlo() {{
   const field      = predGetField();
-  const transition = document.getElementById('pred-transition').value;
-  const event_code = document.getElementById('pred-event').value;
+  const event_code = predGetEventCode();
   const statusEl   = document.getElementById('pred-run-status');
 
-  if (!predChosenId) {{
-    statusEl.textContent = 'Search for and select an athlete first.';
-    return;
-  }}
   if (!field.length) {{
     statusEl.textContent = 'No athletes in field.';
     return;
   }}
-  if (!field.find(a => a.id === predChosenId)) {{
+
+  if (predMode === 'team') {{
+    const schools = [...new Set(field.map(a => a.school).filter(Boolean))];
+    const scoringSchools = schools.filter(sch =>
+      field.filter(a => a.school === sch).length >= PRED_TEAM_SCORERS
+    );
+    const nScorersBySchool = {{}};
+    field.forEach(a => {{ nScorersBySchool[a.school] = (nScorersBySchool[a.school] || 0) + 1; }});
+    if (!scoringSchools.length) {{
+      statusEl.textContent = `No schools with at least ${{PRED_TEAM_SCORERS}} athletes for team scoring.`;
+      return;
+    }}
+    if (predChosenSchool && !scoringSchools.includes(predChosenSchool)) {{
+      statusEl.textContent = 'Selected team is not in the current field or lacks 5 scorers.';
+      return;
+    }}
+
+    statusEl.textContent = 'Simulating team scores…';
+    document.getElementById('pred-run-btn').disabled = true;
+
+    setTimeout(() => {{
+      const teamPlaces   = {{}};
+      const teamScores   = {{}};
+      const teamWinCounts  = {{}};
+      const teamTop3Counts = {{}};
+      scoringSchools.forEach(s => {{
+        teamPlaces[s] = [];
+        teamScores[s] = [];
+        teamWinCounts[s] = 0;
+        teamTop3Counts[s] = 0;
+      }});
+
+      const trackRoster = !!predChosenSchool;
+      const rosterIdx = trackRoster
+        ? field.map((a, i) => a.school === predChosenSchool ? i : -1).filter(i => i >= 0)
+        : [];
+      const rosterPlaces = {{}};
+      const rosterTimes  = {{}};
+      const rosterTop3   = {{}};
+      const rosterScorer = {{}};
+      if (trackRoster) {{
+        rosterIdx.forEach(i => {{
+          rosterPlaces[i] = [];
+          rosterTimes[i]  = [];
+          rosterTop3[i]   = 0;
+          rosterScorer[i] = 0;
+        }});
+      }}
+
+      for (let sim = 0; sim < N_SIMS; sim++) {{
+        const simTimes = predSimTimes(field, event_code);
+
+        if (trackRoster) {{
+          const order = simTimes
+            .map((t, i) => ({{ t, i }}))
+            .sort((a, b) => a.t - b.t);
+          order.forEach((item, rank) => {{
+            const place = rank + 1;
+            if (rosterPlaces[item.i]) {{
+              rosterPlaces[item.i].push(place);
+              rosterTimes[item.i].push(item.t);
+              if (place <= PRED_TEAM_TOP_PLACE) rosterTop3[item.i]++;
+            }}
+          }});
+          order
+            .filter(item => field[item.i].school === predChosenSchool)
+            .slice(0, PRED_TEAM_SCORERS)
+            .forEach(item => {{ rosterScorer[item.i]++; }});
+        }}
+
+        const teams = predRankTeams(field, simTimes);
+        teams.forEach(t => {{
+          if (!teamPlaces[t.school]) return;
+          teamPlaces[t.school].push(t.teamPlace);
+          teamScores[t.school].push(t.score);
+          if (t.teamPlace === 1) teamWinCounts[t.school]++;
+          if (t.teamPlace <= PRED_TEAM_TOP_PLACE) teamTop3Counts[t.school]++;
+        }});
+      }}
+
+      let teamAthleteStats = null;
+      if (trackRoster && rosterIdx.length) {{
+        teamAthleteStats = rosterIdx.map(i => {{
+          const places = rosterPlaces[i];
+          const times  = rosterTimes[i];
+          const sorted = [...times].sort((a, b) => a - b);
+          return {{
+            ...field[i],
+            medianTime: sorted[Math.floor(sorted.length / 2)],
+            avgPlace:   predAvg(places),
+            bestPlace:  Math.min(...places),
+            worstPlace: Math.max(...places),
+            top3Pct:    rosterTop3[i] / N_SIMS * 100,
+            scorerPct:  rosterScorer[i] / N_SIMS * 100,
+          }};
+        }}).sort((a, b) => a.medianTime - b.medianTime);
+      }}
+
+      predLastResult = {{
+        mode: 'team', hasChosenTeam: !!predChosenSchool, chosenSchool: predChosenSchool,
+        teamPlaces, teamScores, teamWinCounts, teamTop3Counts,
+        teamAthleteStats,
+        field, event_code, scoringSchools, nScorersBySchool,
+      }};
+      renderTeamPredictorResults(predLastResult);
+      statusEl.textContent = predChosenSchool
+        ? `Done — ${{N_SIMS.toLocaleString()}} simulations for ${{predChosenSchool}}`
+        : `Done — ${{N_SIMS.toLocaleString()}} team simulations (${{EVENT_LABELS[event_code] || event_code}})`;
+      document.getElementById('pred-run-btn').disabled = false;
+    }}, 30);
+    return;
+  }}
+
+  const hasChosen = !!predChosenId;
+
+  if (hasChosen && !field.find(a => a.id === predChosenId)) {{
     statusEl.textContent = 'Selected athlete is not in the current field.';
     return;
   }}
@@ -1276,163 +1673,504 @@ function runMonteCarlo() {{
   statusEl.textContent = 'Simulating…';
   document.getElementById('pred-run-btn').disabled = true;
 
-  // Small timeout so the UI can repaint before the compute loop
+  const chosenIdx = hasChosen ? field.findIndex(a => a.id === predChosenId) : -1;
+
   setTimeout(() => {{
-    const block = getImprovementDistribution(event_code, transition);
-
-    // place_counts[i] = number of sims where chosen athlete finished in place i+1
-    const placeCounts = new Array(field.length).fill(0);
-
-    // Also track each athlete's simulated times for the median field table
+    const placeCounts = hasChosen ? new Array(field.length).fill(0) : null;
+    const winCounts   = new Array(field.length).fill(0);
+    const top8Counts  = new Array(field.length).fill(0);
     const allSimTimes = field.map(() => []);
+    const chosenPlaces = hasChosen ? [] : null;
 
     for (let sim = 0; sim < N_SIMS; sim++) {{
-      const simTimes = field.map(ath => {{
-        if (!block) return ath.best_time; // no dist → hold fixed
-        const imp = sampleImprovement(ath.decile, block);
-        return applyImprovement(ath.best_time, imp);
-      }});
+      const simTimes = predSimTimes(field, event_code);
 
-      // Rank (lower time = better)
-      const chosenSimTime = simTimes[field.findIndex(a => a.id === predChosenId)];
-      let place = 1;
-      simTimes.forEach((t, i) => {{
-        if (field[i].id !== predChosenId && t < chosenSimTime) place++;
+      const order = simTimes
+        .map((t, i) => ({{ t, i }}))
+        .sort((a, b) => a.t - b.t);
+
+      winCounts[order[0].i]++;
+
+      order.forEach((item, rank) => {{
+        const place = rank + 1;
+        if (place <= 8) top8Counts[item.i]++;
+        if (hasChosen && item.i === chosenIdx) {{
+          chosenPlaces.push(place);
+          placeCounts[place - 1]++;
+        }}
       }});
-      placeCounts[place - 1]++;
 
       simTimes.forEach((t, i) => allSimTimes[i].push(t));
     }}
 
-    // Compute median simulated time per athlete for the field table
     const medianTimes = allSimTimes.map(times => {{
       const s = [...times].sort((a, b) => a - b);
       return s[Math.floor(s.length / 2)];
     }});
 
-    predLastResult = {{ placeCounts, field, medianTimes, event_code, transition, block }};
+    const chosenTimes = hasChosen ? allSimTimes[chosenIdx] : null;
+
+    predLastResult = {{
+      mode: 'individual', hasChosen, placeCounts, chosenPlaces, chosenTimes,
+      winCounts, top8Counts, field, medianTimes, event_code,
+    }};
     renderPredictorResults(predLastResult);
 
-    statusEl.textContent = `Done — ${{N_SIMS.toLocaleString()}} simulations`;
+    statusEl.textContent = hasChosen
+      ? `Done — ${{N_SIMS.toLocaleString()}} simulations for ${{field[chosenIdx].name}}`
+      : `Done — ${{N_SIMS.toLocaleString()}} field simulations`;
     document.getElementById('pred-run-btn').disabled = false;
   }}, 30);
 }}
 
+function predAvg(arr) {{
+  if (!arr || !arr.length) return null;
+  return arr.reduce((s, v) => s + v, 0) / arr.length;
+}}
+
+function predPctile(arr, p) {{
+  if (!arr || !arr.length) return null;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx), hi = Math.ceil(idx);
+  return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}}
+
 // ── Render results ────────────────────────────────────────────────────────────
-function renderPredictorResults({{ placeCounts, field, medianTimes, event_code }}) {{
-  const chosenIdx = field.findIndex(a => a.id === predChosenId);
-  const chosenAth = field[chosenIdx];
-  const n         = field.length;
-
+function renderPredictorResults({{ hasChosen, placeCounts, chosenPlaces, chosenTimes,
+                                   winCounts, top8Counts, field, medianTimes, event_code }}) {{
   document.getElementById('pred-results').style.display = 'block';
+  document.getElementById('pred-team-results').style.display = 'none';
+  document.getElementById('pred-focused-section').style.display = '';
+  document.getElementById('pred-field-section').style.display = '';
+  document.getElementById('pred-team-roster-card').style.display = 'none';
 
-  // ── Finishing place bar chart ──
-  mkChart('chart-pred-places', {{
-    type: 'bar',
-    data: {{
-      labels:   Array.from({{length: n}}, (_, i) => `P${{i+1}}`),
-      datasets: [{{
-        label: 'Probability (%)',
-        data:  placeCounts.map(c => +(c / N_SIMS * 100).toFixed(2)),
-        backgroundColor: placeCounts.map((_, i) =>
-          i === 0 ? '#f59e0b' : i < 3 ? '#00c8ff' : i < 6 ? '#7fff6e' : '#444'
-        ),
-      }}],
-    }},
-    options: {{
-      plugins: {{ legend: {{ display: false }},
-        tooltip: {{ callbacks: {{ label: ctx => `${{ctx.raw.toFixed(1)}}%` }} }} }},
-      scales: {{
-        x: {{ title: {{ display: true, text: 'Finishing Place' }} }},
-        y: {{ title: {{ display: true, text: '% of simulations' }},
-              ticks: {{ callback: v => v + '%' }} }},
+  const focusedEl = document.getElementById('pred-focused-section');
+  const fieldEl   = document.getElementById('pred-field-section');
+  const winnersEl = document.getElementById('pred-top-winners-card');
+
+  if (hasChosen) {{
+    focusedEl.style.display = 'block';
+    winnersEl.style.display = 'none';
+    fieldEl.querySelector('#pred-field-table-card').style.display = 'none';
+
+    const chosenIdx = field.findIndex(a => a.id === predChosenId);
+    const chosenAth = field[chosenIdx];
+    const n         = field.length;
+
+    document.getElementById('pred-summary-title').textContent =
+      `${{chosenAth.name}} — Simulation Summary`;
+
+    mkChart('chart-pred-places', {{
+      type: 'bar',
+      data: {{
+        labels:   Array.from({{length: n}}, (_, i) => `P${{i+1}}`),
+        datasets: [{{
+          label: 'Probability (%)',
+          data:  placeCounts.map(c => +(c / N_SIMS * 100).toFixed(2)),
+          backgroundColor: placeCounts.map((_, i) =>
+            i === 0 ? '#f59e0b' : i < 3 ? '#00c8ff' : i < 6 ? '#7fff6e' : '#444'
+          ),
+        }}],
       }},
-    }},
-  }});
-
-  // ── Cumulative chart ──
-  let cumul = 0;
-  const cumulData = placeCounts.map(c => {{ cumul += c / N_SIMS * 100; return +cumul.toFixed(2); }});
-  mkChart('chart-pred-cumul', {{
-    type: 'line',
-    data: {{
-      labels:   Array.from({{length: n}}, (_, i) => `Top ${{i+1}}`),
-      datasets: [{{
-        label: 'Cumulative P(%)',
-        data:  cumulData,
-        borderColor: '#00c8ff',
-        backgroundColor: 'rgba(0,200,255,0.08)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 3,
-      }}],
-    }},
-    options: {{
-      plugins: {{ legend: {{ display: false }},
-        tooltip: {{ callbacks: {{ label: ctx => `${{ctx.raw.toFixed(1)}}%` }} }} }},
-      scales: {{
-        x: {{ title: {{ display: true, text: 'Finish ≤ Place' }} }},
-        y: {{ min: 0, max: 100,
-              title: {{ display: true, text: 'Cumulative probability (%)' }},
-              ticks: {{ callback: v => v + '%' }} }},
+      options: {{
+        plugins: {{ legend: {{ display: false }},
+          tooltip: {{ callbacks: {{ label: ctx => `${{ctx.raw.toFixed(1)}}%` }} }} }},
+        scales: {{
+          x: {{ title: {{ display: true, text: 'Finishing Place' }} }},
+          y: {{ title: {{ display: true, text: '% of simulations' }},
+                ticks: {{ callback: v => v + '%' }} }},
+        }},
       }},
-    }},
-  }});
+    }});
 
-  // ── Key probability table ──
-  const targets = [1, 3, 6, 10, Math.ceil(n / 2)].filter((v, i, a) => v <= n && a.indexOf(v) === i);
-  const probTableEl = document.getElementById('pred-prob-table');
-  probTableEl.innerHTML = `
+    let cumul = 0;
+    const cumulData = placeCounts.map(c => {{ cumul += c / N_SIMS * 100; return +cumul.toFixed(2); }});
+    mkChart('chart-pred-cumul', {{
+      type: 'line',
+      data: {{
+        labels:   Array.from({{length: n}}, (_, i) => `Top ${{i+1}}`),
+        datasets: [{{
+          label: 'Cumulative P(%)',
+          data:  cumulData,
+          borderColor: '#00c8ff',
+          backgroundColor: 'rgba(0,200,255,0.08)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+        }}],
+      }},
+      options: {{
+        plugins: {{ legend: {{ display: false }},
+          tooltip: {{ callbacks: {{ label: ctx => `${{ctx.raw.toFixed(1)}}%` }} }} }},
+        scales: {{
+          x: {{ title: {{ display: true, text: 'Finish ≤ Place' }} }},
+          y: {{ min: 0, max: 100,
+                title: {{ display: true, text: 'Cumulative probability (%)' }},
+                ticks: {{ callback: v => v + '%' }} }},
+        }},
+      }},
+    }});
+
+    const targets = [1, 3, 6, 10, Math.ceil(n / 2)].filter((v, i, a) => v <= n && a.indexOf(v) === i);
+    document.getElementById('pred-prob-table').innerHTML = `
+      <table class="data-table">
+        <thead><tr>
+          ${{targets.map(t => `<th style="text-align:center;">Top ${{t}}</th>`).join('')}}
+          <th style="text-align:center;">Win</th>
+        </tr></thead>
+        <tbody><tr>
+          ${{targets.map(t => {{
+            const p = cumulData[t - 1] || 0;
+            return `<td style="text-align:center;font-weight:600;color:${{p > 50 ? 'var(--good)' : p > 20 ? 'var(--text)' : 'var(--muted)'}}">${{p.toFixed(1)}}%</td>`;
+          }}).join('')}}
+          <td style="text-align:center;font-weight:600;color:var(--accent)">
+            ${{(placeCounts[0] / N_SIMS * 100).toFixed(1)}}%
+          </td>
+        </tr></tbody>
+      </table>`;
+
+    const p10Time  = predPctile(chosenTimes, 0.10);
+    const p90Time  = predPctile(chosenTimes, 0.90);
+    const avgTime   = predAvg(chosenTimes);
+    const p10Place = predPctile(chosenPlaces, 0.10);
+    const p90Place = predPctile(chosenPlaces, 0.90);
+    const avgPlace  = predAvg(chosenPlaces);
+
+    document.getElementById('pred-athlete-summary').innerHTML = `
+      <table class="data-table">
+        <thead><tr>
+          <th></th>
+          <th class="num">Simulated Time</th>
+          <th class="num">Finishing Place</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>P10 (top 10%)</strong></td>
+            <td class="num" style="color:var(--good)">${{secToMMSS(p10Time)}}</td>
+            <td class="num" style="color:var(--good)">P${{p10Place != null ? Math.round(p10Place) : '—'}}</td>
+          </tr>
+          <tr>
+            <td><strong>P90 (bottom 10%)</strong></td>
+            <td class="num" style="color:var(--bad)">${{secToMMSS(p90Time)}}</td>
+            <td class="num" style="color:var(--bad)">P${{p90Place != null ? Math.round(p90Place) : '—'}}</td>
+          </tr>
+          <tr>
+            <td><strong>Average</strong></td>
+            <td class="num">${{secToMMSS(avgTime)}}</td>
+            <td class="num">${{avgPlace != null ? avgPlace.toFixed(1) : '—'}}</td>
+          </tr>
+          <tr>
+            <td style="color:var(--muted)">Current best</td>
+            <td class="num" style="color:var(--muted)">${{secToMMSS(chosenAth.best_time)}}</td>
+            <td class="num" style="color:var(--muted)">${{field.length}}-person field</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="margin-top:8px;font-size:11px;color:var(--muted);">
+        ${{EVENT_LABELS[event_code] || event_code}} · ${{chosenAth.class_year}} ·
+        ${{TRANS_LABELS[chosenAth.transition] || chosenAth.transition || ''}} ·
+        ${{N_SIMS.toLocaleString()}} runs
+      </div>`;
+  }} else {{
+    focusedEl.style.display = 'none';
+    winnersEl.style.display = 'block';
+    document.getElementById('pred-field-table-card').style.display = 'block';
+  }}
+
+  if (!hasChosen) {{
+    const topN = field
+      .map((ath, i) => ({{
+        ...ath,
+        winPct: winCounts[i] / N_SIMS * 100,
+        medianTime: medianTimes[i],
+      }}))
+      .sort((a, b) => b.winPct - a.winPct || a.medianTime - b.medianTime)
+      .slice(0, 15);
+
+    document.getElementById('pred-top-winners').innerHTML = `
+      <table class="data-table">
+        <thead><tr>
+          <th>#</th><th>Athlete</th><th>School</th><th>Yr</th>
+          <th class="num">Win %</th><th class="num">Median Sim Time</th>
+        </tr></thead>
+        <tbody>
+          ${{topN.map((ath, idx) => `
+            <tr>
+              <td>${{idx + 1}}</td>
+              <td><strong>${{ath.name}}</strong></td>
+              <td style="font-size:11px;color:var(--muted)">${{ath.school}}</td>
+              <td>${{ath.class_year}}</td>
+              <td class="num" style="color:var(--accent)">${{ath.winPct.toFixed(1)}}%</td>
+              <td class="num">${{secToMMSS(ath.medianTime)}}</td>
+            </tr>`).join('')}}
+        </tbody>
+      </table>`;
+  }}
+
+  if (!hasChosen) {{
+    const ranked = field
+      .map((ath, i) => ({{ ...ath, medianTime: medianTimes[i] }}))
+      .sort((a, b) => a.medianTime - b.medianTime);
+
+    document.getElementById('pred-field-table').innerHTML = `
+      <table class="data-table">
+        <thead><tr>
+          <th>#</th><th>Athlete</th><th>School</th><th>Transition</th>
+          <th class="num">Current Best</th><th class="num">Median Sim</th>
+          <th class="num">Top 8 %</th>
+        </tr></thead>
+        <tbody>
+          ${{ranked.map((ath, idx) => {{
+            const wi = field.findIndex(f => f.id === ath.id);
+            const top8Pct = top8Counts[wi] / N_SIMS * 100;
+            return `<tr>
+              <td>${{idx + 1}}</td>
+              <td>${{ath.name}}</td>
+              <td style="font-size:11px;color:var(--muted)">${{ath.school}}</td>
+              <td style="font-size:11px;color:var(--muted)">${{TRANS_LABELS[ath.transition] || ath.transition || '—'}}</td>
+              <td class="num">${{secToMMSS(ath.best_time)}}</td>
+              <td class="num">${{secToMMSS(ath.medianTime)}}</td>
+              <td class="num">${{top8Pct.toFixed(1)}}%</td>
+            </tr>`;
+          }}).join('')}}
+        </tbody>
+      </table>`;
+  }}
+}}
+
+function renderTeamPredictorResults({{ hasChosenTeam, chosenSchool, teamPlaces, teamScores,
+                                       teamWinCounts, teamTop3Counts, teamAthleteStats,
+                                       scoringSchools, nScorersBySchool, event_code }}) {{
+  document.getElementById('pred-results').style.display = 'block';
+  document.getElementById('pred-field-section').style.display = 'none';
+  document.getElementById('pred-team-results').style.display = 'block';
+
+  const topTeamsCard = document.getElementById('pred-top-teams-card');
+  const teamTableCard = document.getElementById('pred-team-table-card');
+  const rosterCard = document.getElementById('pred-team-roster-card');
+  const focusedEl = document.getElementById('pred-focused-section');
+
+  const teams = scoringSchools.map(school => {{
+    const places = teamPlaces[school] || [];
+    const scores = teamScores[school] || [];
+    return {{
+      school,
+      nAthletes: nScorersBySchool[school] || 0,
+      avgRank:   predAvg(places),
+      p10Rank:   places.length ? predPctile(places, 0.10) : null,
+      p90Rank:   places.length ? predPctile(places, 0.90) : null,
+      avgScore:  predAvg(scores),
+      p10Score:  scores.length ? predPctile(scores, 0.10) : null,
+      p90Score:  scores.length ? predPctile(scores, 0.90) : null,
+      winPct:    (teamWinCounts[school] || 0) / N_SIMS * 100,
+      top3Pct:   (teamTop3Counts[school] || 0) / N_SIMS * 100,
+    }};
+  }}).sort((a, b) => a.avgRank - b.avgRank || a.avgScore - b.avgScore);
+
+  if (hasChosenTeam && chosenSchool && teamPlaces[chosenSchool]) {{
+    focusedEl.style.display = 'block';
+    topTeamsCard.style.display = 'none';
+    teamTableCard.style.display = 'none';
+    rosterCard.style.display = 'block';
+
+    const places = teamPlaces[chosenSchool];
+    const scores = teamScores[chosenSchool];
+    const nTeams = scoringSchools.length;
+
+    const placeCounts = new Array(nTeams).fill(0);
+    places.forEach(p => {{ if (p >= 1 && p <= nTeams) placeCounts[p - 1]++; }});
+
+    document.getElementById('pred-summary-title').textContent =
+      `${{chosenSchool}} — Team Simulation Summary`;
+
+    mkChart('chart-pred-places', {{
+      type: 'bar',
+      data: {{
+        labels: Array.from({{length: nTeams}}, (_, i) => `P${{i + 1}}`),
+        datasets: [{{
+          label: 'Probability (%)',
+          data: placeCounts.map(c => +(c / N_SIMS * 100).toFixed(2)),
+          backgroundColor: placeCounts.map((_, i) =>
+            i === 0 ? '#f59e0b' : i < 3 ? '#00c8ff' : i < 8 ? '#7fff6e' : '#444'
+          ),
+        }}],
+      }},
+      options: {{
+        plugins: {{ legend: {{ display: false }},
+          tooltip: {{ callbacks: {{ label: ctx => `${{ctx.raw.toFixed(1)}}%` }} }} }},
+        scales: {{
+          x: {{ title: {{ display: true, text: 'Team Finishing Place' }} }},
+          y: {{ title: {{ display: true, text: '% of simulations' }},
+                ticks: {{ callback: v => v + '%' }} }},
+        }},
+      }},
+    }});
+
+    let cumul = 0;
+    const cumulData = placeCounts.map(c => {{ cumul += c / N_SIMS * 100; return +cumul.toFixed(2); }});
+    mkChart('chart-pred-cumul', {{
+      type: 'line',
+      data: {{
+        labels: Array.from({{length: nTeams}}, (_, i) => `Top ${{i + 1}}`),
+        datasets: [{{
+          label: 'Cumulative P(%)',
+          data: cumulData,
+          borderColor: '#00c8ff',
+          backgroundColor: 'rgba(0,200,255,0.08)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+        }}],
+      }},
+      options: {{
+        plugins: {{ legend: {{ display: false }},
+          tooltip: {{ callbacks: {{ label: ctx => `${{ctx.raw.toFixed(1)}}%` }} }} }},
+        scales: {{
+          x: {{ title: {{ display: true, text: 'Team finish ≤ place' }} }},
+          y: {{ min: 0, max: 100,
+                title: {{ display: true, text: 'Cumulative probability (%)' }},
+                ticks: {{ callback: v => v + '%' }} }},
+        }},
+      }},
+    }});
+
+    const targets = [1, 3, 5, 8].filter(t => t <= nTeams);
+    document.getElementById('pred-prob-table').innerHTML = `
+      <table class="data-table">
+        <thead><tr>
+          ${{targets.map(t => `<th style="text-align:center;">Top ${{t}}</th>`).join('')}}
+          <th style="text-align:center;">Win</th>
+        </tr></thead>
+        <tbody><tr>
+          ${{targets.map(t => {{
+            const p = cumulData[t - 1] || 0;
+            return `<td style="text-align:center;font-weight:600;color:${{p > 50 ? 'var(--good)' : p > 20 ? 'var(--text)' : 'var(--muted)'}}">${{p.toFixed(1)}}%</td>`;
+          }}).join('')}}
+          <td style="text-align:center;font-weight:600;color:var(--accent)">
+            ${{(placeCounts[0] / N_SIMS * 100).toFixed(1)}}%
+          </td>
+        </tr></tbody>
+      </table>`;
+
+    const p10Rank  = predPctile(places, 0.10);
+    const p90Rank  = predPctile(places, 0.90);
+    const avgRank   = predAvg(places);
+    const p10Score  = predPctile(scores, 0.10);
+    const p90Score  = predPctile(scores, 0.90);
+    const avgScore   = predAvg(scores);
+
+    document.getElementById('pred-athlete-summary').innerHTML = `
+      <table class="data-table">
+        <thead><tr>
+          <th></th>
+          <th class="num">Team Score</th>
+          <th class="num">Team Rank</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>P10 (top 10%)</strong></td>
+            <td class="num" style="color:var(--good)">${{p10Score != null ? Math.round(p10Score) : '—'}}</td>
+            <td class="num" style="color:var(--good)">P${{p10Rank != null ? Math.round(p10Rank) : '—'}}</td>
+          </tr>
+          <tr>
+            <td><strong>P90 (bottom 10%)</strong></td>
+            <td class="num" style="color:var(--bad)">${{p90Score != null ? Math.round(p90Score) : '—'}}</td>
+            <td class="num" style="color:var(--bad)">P${{p90Rank != null ? Math.round(p90Rank) : '—'}}</td>
+          </tr>
+          <tr>
+            <td><strong>Average</strong></td>
+            <td class="num">${{avgScore != null ? avgScore.toFixed(1) : '—'}}</td>
+            <td class="num">${{avgRank != null ? avgRank.toFixed(1) : '—'}}</td>
+          </tr>
+          <tr>
+            <td style="color:var(--muted)">Field context</td>
+            <td class="num" style="color:var(--muted)">${{nScorersBySchool[chosenSchool] || 0}} scorers</td>
+            <td class="num" style="color:var(--muted)">${{nTeams}} scoring teams</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="margin-top:8px;font-size:11px;color:var(--muted);">
+        ${{EVENT_LABELS[event_code] || event_code}} · top-${{PRED_TEAM_SCORERS}} place scoring ·
+        ${{N_SIMS.toLocaleString()}} runs
+      </div>`;
+
+    const roster = teamAthleteStats || [];
+    document.getElementById('pred-team-roster').innerHTML = roster.length ? `
+      <table class="data-table">
+        <thead><tr>
+          <th>#</th><th>Athlete</th><th>Transition</th>
+          <th class="num">Current Best</th><th class="num">Median Sim</th>
+          <th class="num">Avg Place</th><th class="num">Scorer %</th>
+        </tr></thead>
+        <tbody>
+          ${{roster.map((ath, idx) => `
+            <tr>
+              <td>${{idx + 1}}</td>
+              <td><strong>${{ath.name}}</strong></td>
+              <td style="font-size:11px;color:var(--muted)">${{TRANS_LABELS[ath.transition] || ath.transition || '—'}}</td>
+              <td class="num">${{secToMMSS(ath.best_time)}}</td>
+              <td class="num">${{secToMMSS(ath.medianTime)}}</td>
+              <td class="num">${{ath.avgPlace != null ? ath.avgPlace.toFixed(1) : '—'}}</td>
+              <td class="num" style="color:${{ath.scorerPct >= 80 ? 'var(--good)' : ath.scorerPct >= 40 ? 'var(--text)' : 'var(--muted)'}}">${{ath.scorerPct.toFixed(1)}}%</td>
+            </tr>`).join('')}}
+        </tbody>
+      </table>` : `<p style="font-size:13px;color:var(--muted);">No athletes on this team in the current field.</p>`;
+    return;
+  }}
+
+  rosterCard.style.display = 'none';
+  focusedEl.style.display = 'none';
+  topTeamsCard.style.display = 'block';
+  teamTableCard.style.display = 'block';
+
+  const topTeams = [...teams].sort((a, b) => b.winPct - a.winPct || a.avgRank - b.avgRank).slice(0, 15);
+
+  document.getElementById('pred-top-teams').innerHTML = `
     <table class="data-table">
       <thead><tr>
-        ${{targets.map(t => `<th style="text-align:center;">Top ${{t}}</th>`).join('')}}
-        <th style="text-align:center;">Win</th>
-      </tr></thead>
-      <tbody><tr>
-        ${{targets.map(t => {{
-          const p = cumulData[t - 1] || 0;
-          return `<td style="text-align:center;font-weight:600;color:${{p > 50 ? 'var(--good)' : p > 20 ? 'var(--text)' : 'var(--muted)'}}">${{p.toFixed(1)}}%</td>`;
-        }}).join('')}}
-        <td style="text-align:center;font-weight:600;color:var(--accent)">
-          ${{(placeCounts[0] / N_SIMS * 100).toFixed(1)}}%
-        </td>
-      </tr></tbody>
-    </table>`;
-
-  // ── Median field table ──
-  const ranked = field
-    .map((ath, i) => ({{ ...ath, medianTime: medianTimes[i], isChosen: ath.id === predChosenId }}))
-    .sort((a, b) => a.medianTime - b.medianTime);
-
-  const fieldTableEl = document.getElementById('pred-field-table');
-  fieldTableEl.innerHTML = `
-    <table class="data-table">
-      <thead><tr>
-        <th>#</th><th>Athlete</th><th>School</th><th>Yr</th>
-        <th class="num">Current Best</th><th class="num">Median Sim</th>
-        <th class="num">Δ</th><th class="num">Decile</th>
+        <th>#</th><th>School</th>
+        <th class="num">Win %</th><th class="num">Avg Team Rank</th><th class="num">Avg Team Score</th>
       </tr></thead>
       <tbody>
-        ${{ranked.map((ath, idx) => {{
-          const delta  = ath.best_time - ath.medianTime;
-          const deltaS = delta >= 0 ? `-${{secToMMSS(Math.abs(delta))}`
-                                    : `+${{secToMMSS(Math.abs(delta))}}`; // + = slower
-          const rowStyle = ath.isChosen
-            ? 'background:rgba(0,200,255,0.10);font-weight:600;'
-            : '';
-          return `<tr style="${{rowStyle}}">
+        ${{topTeams.map((t, idx) => `
+          <tr>
             <td>${{idx + 1}}</td>
-            <td>${{ath.name}}${{ath.isChosen ? ' ★' : ''}}</td>
-            <td style="font-size:11px;color:var(--muted)">${{ath.school}}</td>
-            <td>${{ath.class_year}}</td>
-            <td class="num">${{secToMMSS(ath.best_time)}}</td>
-            <td class="num">${{secToMMSS(ath.medianTime)}}</td>
-            <td class="num" style="color:${{delta >= 0 ? 'var(--good)' : 'var(--bad)}}">${{deltaS}}</td>
-            <td class="num">${{ath.decile ? 'D' + ath.decile : '—'}}</td>
-          </tr>`;
-        }}).join('')}}
+            <td><strong>${{t.school}}</strong></td>
+            <td class="num" style="color:var(--accent)">${{t.winPct.toFixed(1)}}%</td>
+            <td class="num">${{t.avgRank != null ? t.avgRank.toFixed(1) : '—'}}</td>
+            <td class="num">${{t.avgScore != null ? t.avgScore.toFixed(1) : '—'}}</td>
+          </tr>`).join('')}}
       </tbody>
     </table>`;
+
+  document.getElementById('pred-team-table').innerHTML = `
+    <table class="data-table">
+      <thead><tr>
+        <th>#</th><th>School</th>
+        <th class="num">Avg Rank</th><th class="num">P10 Rank</th><th class="num">P90 Rank</th>
+        <th class="num">Avg Score</th><th class="num">P10 Score</th><th class="num">P90 Score</th>
+        <th class="num">Top 3 Team %</th>
+      </tr></thead>
+      <tbody>
+        ${{teams.map((t, idx) => `
+          <tr>
+            <td>${{idx + 1}}</td>
+            <td><strong>${{t.school}}</strong></td>
+            <td class="num">${{t.avgRank != null ? t.avgRank.toFixed(1) : '—'}}</td>
+            <td class="num" style="color:var(--good)">${{t.p10Rank != null ? Math.round(t.p10Rank) : '—'}}</td>
+            <td class="num" style="color:var(--bad)">${{t.p90Rank != null ? Math.round(t.p90Rank) : '—'}}</td>
+            <td class="num">${{t.avgScore != null ? t.avgScore.toFixed(1) : '—'}}</td>
+            <td class="num" style="color:var(--good)">${{t.p10Score != null ? Math.round(t.p10Score) : '—'}}</td>
+            <td class="num" style="color:var(--bad)">${{t.p90Score != null ? Math.round(t.p90Score) : '—'}}</td>
+            <td class="num">${{t.top3Pct.toFixed(1)}}%</td>
+          </tr>`).join('')}}
+      </tbody>
+    </table>
+    <div style="margin-top:8px;font-size:11px;color:var(--muted);">
+      ${{EVENT_LABELS[event_code] || event_code}} · ${{N_SIMS.toLocaleString()}} simulations ·
+      ${{teams.length}} scoring teams (≥${{PRED_TEAM_SCORERS}} athletes)
+    </div>`;
 }}
 
 // ── Utility: seconds → MM:SS.xx ──────────────────────────────────────────────
@@ -1687,7 +2425,6 @@ function renderProgression() {{
     }}
   }});
 
-  // BUG-08 fixed: guard nullable p-values with null-safe access
   mkChart('chart-prog-dist', {{
     type: 'bar',
     data: {{
@@ -1703,7 +2440,6 @@ function renderProgression() {{
     options: baseOpts(true)
   }});
 
-  // Table
   tbody.innerHTML = rows.map(r => {{
     const key = r.from_class + '_to_' + r.to_class;
     const lbl = TRANS_LABELS[key] || key;

@@ -9,7 +9,6 @@ Usage:
   python main.py parse                 # parse HTML into DB
   python main.py analyze               # compute development statistics
   python main.py all                   # run full pipeline end-to-end
-  python main.py demo                  # generate synthetic demo data + analyze
   python main.py add-historical --year 2019   # download one historical season by year
   python main.py add-historical --hnd 138     # or by raw config_hnd code
 """

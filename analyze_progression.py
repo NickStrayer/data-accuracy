@@ -67,7 +67,11 @@ FOCUS_CODES = tuple(FOCUS_EVENTS.keys())
 
 PERCENTILE_BREAKPOINTS = [5, 10, 25, 50, 75, 90, 95]
 
-# ─────────────────────────────────────────────────────────────────────────────
+from event_bounds import (
+    is_plausible_time,
+    sql_plausible_time_where,
+    trim_improvement_records_by_decile,
+)
 #  Year-by-year NCAA field percentiles (used to discount overall progression)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -179,6 +183,7 @@ def load_best_marks(db_path=DB_PATH) -> pd.DataFrame:
         WHERE r.time_seconds IS NOT NULL
           AND r.time_seconds > 0
           AND r.event_code IN ({placeholders})
+          AND {sql_plausible_time_where("r", FOCUS_CODES)}
         GROUP BY r.athlete_id, r.season_year, r.event_code
     )
     SELECT b.athlete_id, b.season_year, b.event_code,
@@ -245,6 +250,75 @@ def _discounted_improvement(
     return disc
 
 
+def _add_fixed_deciles(g_df: pd.DataFrame) -> pd.DataFrame:
+    """Per season_year cohort: rating + fixed-boundary decile (matches compute_ratings)."""
+    parts: list[pd.DataFrame] = []
+    for _season_year, grp in g_df.groupby("season_year"):
+        if len(grp) < 2:
+            continue
+        ranked = grp.copy()
+        ranked["rank"] = ranked["best_time"].rank(method="min", ascending=True)
+        n = len(ranked)
+        ranked["rating"] = 100.0 * (1 - (ranked["rank"] - 1) / n)
+        ranked["decile"] = ranked["rating"].apply(
+            lambda r: max(1, min(10, int(r / 10) + 1))
+        )
+        parts.append(ranked)
+    if not parts:
+        return g_df.copy()
+    return pd.concat(parts, ignore_index=True)
+
+
+def _collect_transition_pair_records(
+    g_df: pd.DataFrame,
+    from_cls: str,
+    to_cls: str,
+    event_code: str,
+    field_curve: dict | None,
+) -> list[dict]:
+    """
+    One record per athlete transition pair after time-plausibility and
+    per-decile P0.5/P99.5 improvement trimming.
+    """
+    keyed = g_df.set_index(["athlete_id", "season_year", "class_year"], drop=False)
+    records: list[dict] = []
+    for athlete_id, ft, fy, tt, ty in _iter_transition_pairs(g_df, from_cls, to_cls):
+        if not _times_plausible_for_event(ft, tt, event_code):
+            continue
+        try:
+            fr = keyed.loc[(athlete_id, fy, from_cls)]
+        except KeyError:
+            continue
+        if isinstance(fr, pd.DataFrame):
+            fr = fr.iloc[0]
+        if pd.isna(fr.get("decile")):
+            continue
+        imp = pct_improvement(ft, tt)
+        if np.isnan(imp):
+            continue
+        records.append({
+            "from_decile": int(fr["decile"]),
+            "imp":         float(imp),
+            "disc":        float(_discounted_improvement(imp, fy, ty, field_curve)),
+            "from_time":   ft,
+        })
+    return trim_improvement_records_by_decile(records)
+
+
+def _trim_merged_improvements_by_decile(merged: pd.DataFrame) -> pd.DataFrame:
+    """Apply per-from_decile P0.5/P99.5 trim on a merged transition DataFrame."""
+    if merged.empty:
+        return merged
+    records = [
+        {"from_decile": int(row["from_decile"]), "imp": float(row["imp"]), "_idx": idx}
+        for idx, row in merged.iterrows()
+        if not np.isnan(row["imp"])
+    ]
+    kept = trim_improvement_records_by_decile(records)
+    keep_idx = {r["_idx"] for r in kept}
+    return merged.loc[[i for i in merged.index if i in keep_idx]].copy()
+
+
 def _iter_transition_pairs(g_df: pd.DataFrame, from_cls: str, to_cls: str):
     """
     For each athlete, pair the best mark from their first from-class season
@@ -282,12 +356,13 @@ def _iter_transition_pairs(g_df: pd.DataFrame, from_cls: str, to_cls: str):
 
         if ft <= 0:
             continue
-        yield int(athlete_id), ft, fy, tt, ty
+        yield athlete_id, ft, fy, tt, ty
 
 
 def _transition_improvements(
     g_df: pd.DataFrame,
     field_curve: dict[int, float] | None = None,
+    event_code: str | None = None,
 ) -> dict[str, dict[str, np.ndarray]]:
     """
     Per-transition arrays of % improvement for one event × gender.
@@ -295,24 +370,21 @@ def _transition_improvements(
     Each athlete contributes at most one pair: best time from their first
     from-class season, best time from their first to-class season after that.
     Zero and negative changes are kept; only unpaired or same-season data is
-    excluded.
+    excluded. Pairs outside each starting decile's P0.5-P99.5 band are dropped.
     """
+    if not event_code:
+        raise ValueError("event_code is required for transition improvement trimming")
+    g_enriched = _add_fixed_deciles(g_df)
     buckets: dict[str, dict[str, np.ndarray]] = {}
     for from_cls, to_cls in TRANSITIONS:
         key = f"{from_cls}_to_{to_cls}"
-        raw_imps: list[float] = []
-        disc_imps: list[float] = []
-        for _aid, ft, fy, tt, ty in _iter_transition_pairs(g_df, from_cls, to_cls):
-            imp = pct_improvement(ft, tt)
-            if np.isnan(imp):
-                continue
-            raw_imps.append(imp)
-            disc_imps.append(_discounted_improvement(imp, fy, ty, field_curve))
-
-        if len(raw_imps) >= 5:
+        records = _collect_transition_pair_records(
+            g_enriched, from_cls, to_cls, event_code, field_curve
+        )
+        if len(records) >= 5:
             buckets[key] = {
-                "raw":        np.array(raw_imps),
-                "discounted": np.array(disc_imps),
+                "raw":        np.array([r["imp"] for r in records]),
+                "discounted": np.array([r["disc"] for r in records]),
             }
 
     return buckets
@@ -332,7 +404,7 @@ def compute_progression(df_marks: pd.DataFrame, yearly_field_stats: dict) -> dic
             if len(g_df) < 10:
                 continue
             field_curve = _build_field_curve(yearly_field_stats, event_code, gender)
-            buckets = _transition_improvements(g_df, field_curve)
+            buckets = _transition_improvements(g_df, field_curve, event_code)
             if not buckets:
                 continue
             output[event_code][gender] = {}
@@ -405,16 +477,13 @@ def compute_breakout_rates_empirical(df_marks: pd.DataFrame, yearly_field_stats:
                 "_thresholds_seconds": thresholds_s,
             }
 
-            for key, variants in _transition_improvements(g_df, field_curve).items():
-                from_cls, to_cls = key.split("_to_")
-
-                paired: list[tuple] = []
-                for _aid, ft, fy, tt, ty in _iter_transition_pairs(g_df, from_cls, to_cls):
-                    imp = pct_improvement(ft, tt)
-                    if np.isnan(imp):
-                        continue
-                    disc = _discounted_improvement(imp, fy, ty, field_curve)
-                    paired.append((ft, imp, disc))
+            g_enriched = _add_fixed_deciles(g_df)
+            for from_cls, to_cls in TRANSITIONS:
+                key = f"{from_cls}_to_{to_cls}"
+                records = _collect_transition_pair_records(
+                    g_enriched, from_cls, to_cls, event_code, field_curve
+                )
+                paired = [(r["from_time"], r["imp"], r["disc"]) for r in records]
 
                 if not paired:
                     continue
@@ -537,35 +606,90 @@ def compute_ratings(df_marks: pd.DataFrame) -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _merge_class_transition(g, from_cls: str, to_cls: str) -> pd.DataFrame:
-    from_d = (
-        g[g["class_year"] == from_cls]
-        [["athlete_id", "decile", "season_year", "rating", "best_time"]]
-        .rename(columns={"decile": "from_decile", "season_year": "from_year",
-                         "rating": "from_rating", "best_time": "from_time"})
-    )
-    to_d = (
-        g[g["class_year"] == to_cls]
-        [["athlete_id", "decile", "season_year", "best_time"]]
-        .rename(columns={"decile": "to_decile", "season_year": "to_year",
-                         "best_time": "to_time"})
-    )
-    merged = (
-        from_d.merge(to_d, on="athlete_id")
-        .dropna(subset=["from_decile", "to_decile"])
-    )
-    merged = merged[merged["to_year"] > merged["from_year"]]
-    return merged.drop_duplicates("athlete_id")
+    """
+    One row per athlete: best mark from their first from_cls season paired with
+    the best mark from their first to_cls season strictly afterward.
+    """
+    if g.empty:
+        return pd.DataFrame()
+
+    keyed = g.set_index(["athlete_id", "season_year", "class_year"], drop=False)
+    rows: list[dict] = []
+    for athlete_id, ft, fy, tt, ty in _iter_transition_pairs(g, from_cls, to_cls):
+        try:
+            fr = keyed.loc[(athlete_id, fy, from_cls)]
+            tr = keyed.loc[(athlete_id, ty, to_cls)]
+        except KeyError:
+            continue
+        if isinstance(fr, pd.DataFrame):
+            fr, tr = fr.iloc[0], tr.iloc[0]
+        rows.append({
+            "athlete_id":   athlete_id,
+            "from_decile":  fr["decile"],
+            "from_year":    fy,
+            "from_rating":  fr["rating"],
+            "from_time":    ft,
+            "to_decile":    tr["decile"],
+            "to_year":      ty,
+            "to_time":      tt,
+        })
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).dropna(subset=["from_decile", "to_decile"])
 
 
-def _build_rating_transition_block(merged: pd.DataFrame, field_curve: dict):
+def _time_plausible(time_sec: float, event_code: str | None) -> bool:
+    return is_plausible_time(event_code or "", time_sec)
+
+
+def _times_plausible_for_event(
+    from_time: float,
+    to_time: float,
+    event_code: str | None,
+) -> bool:
+    return _time_plausible(from_time, event_code) and _time_plausible(to_time, event_code)
+
+
+def _filter_transition_pairs(
+    merged: pd.DataFrame,
+    event_code: str | None,
+) -> pd.DataFrame:
+    """Keep only pairs whose from/to marks are not impossibly fast for the event."""
+    if merged.empty:
+        return merged
+    keep: list[bool] = []
+    for _, row in merged.iterrows():
+        ft, tt = float(row["from_time"]), float(row["to_time"])
+        keep.append(_times_plausible_for_event(ft, tt, event_code))
+    return merged[np.array(keep)].copy()
+
+
+def _build_rating_transition_block(
+    merged: pd.DataFrame,
+    field_curve: dict,
+    event_code: str | None = None,
+):
+    merged = _filter_transition_pairs(merged, event_code)
     if len(merged) < 5:
         return None
 
-    matrix = {}
+    merged = merged.copy()
+    merged["imp"] = [
+        pct_improvement(float(ft), float(tt))
+        for ft, tt in zip(merged["from_time"], merged["to_time"])
+    ]
+    merged = _trim_merged_improvements_by_decile(merged)
+    if len(merged) < 5:
+        return None
+
+    matrix: dict[str, dict[str, float]] = {}
+    by_cell: dict[str, dict[str, list]] = {}
+    by_from: dict[str, list] = {str(d): [] for d in range(1, 11)}
+
     for fd in range(1, 11):
         sub   = merged[merged["from_decile"] == fd]
         total = len(sub)
-        row_map = {}
+        row_map: dict[str, float] = {}
         for td in range(1, 11):
             p = float((sub["to_decile"] == td).sum() / total) if total > 0 else 0.0
             if p > 0:
@@ -574,11 +698,19 @@ def _build_rating_transition_block(merged: pd.DataFrame, field_curve: dict):
 
     improvements: list = []
     improvements_discounted: list = []
+    triples: list = []
     for _, row in merged.iterrows():
-        imp = pct_improvement(row["from_time"], row["to_time"])
+        fd = str(int(row["from_decile"]))
+        td = str(int(row["to_decile"]))
+        imp = float(row["imp"])
         if np.isnan(imp):
             continue
-        improvements.append([round(float(row["from_rating"]), 2), round(float(imp), 2)])
+
+        imp_r = round(imp, 2)
+        improvements.append([round(float(row["from_rating"]), 2), imp_r])
+        triples.append([int(fd), int(td), imp_r])
+        by_from.setdefault(fd, []).append(imp_r)
+        by_cell.setdefault(fd, {}).setdefault(td, []).append(imp_r)
 
         disc = imp
         fc_from = field_curve.get(int(row["from_year"]))
@@ -587,23 +719,37 @@ def _build_rating_transition_block(merged: pd.DataFrame, field_curve: dict):
             field_imp = pct_improvement(fc_from, fc_to)
             if not np.isnan(field_imp):
                 disc = imp - field_imp
-        improvements_discounted.append([round(float(row["from_rating"]), 2), round(float(disc), 2)])
+        improvements_discounted.append(
+            [round(float(row["from_rating"]), 2), round(float(disc), 2)]
+        )
 
     return {
         "n":                       int(len(merged)),
         "matrix":                  matrix,
+        "improvements_by_cell":    by_cell,
+        "improvements_by_from_decile": by_from,
+        "improvement_triples":     triples,
         "improvements":            improvements,
         "improvements_discounted": improvements_discounted,
     }
 
 
-def compute_rating_transitions(df_ratings: pd.DataFrame, yearly_field_stats: dict) -> dict:
+def compute_rating_transitions(
+    df_ratings: pd.DataFrame,
+    yearly_field_stats: dict,
+) -> dict:
     output: dict = {}
     if df_ratings.empty:
         return output
 
     df = df_ratings.copy()
-    df["decile"] = pd.cut(df["rating"], bins=10, labels=range(1, 11))
+    # Fixed-boundary decile: rating 0–10 → 1, 10–20 → 2, …, 90–100 → 10.
+    # Must match the identical formula in predict_monticarlo.py (_rating_to_decile)
+    # so that distribution buckets and athlete lookups use the same decile scale.
+    # pd.cut was wrong here because it split the *observed* rating range into 10
+    # equal-width bins, so boundaries shifted with each season's data — meaning a
+    # rating of 85 could land in decile 8 one run and decile 9 the next.
+    df["decile"] = df["rating"].apply(lambda r: max(1, min(10, int(r / 10) + 1)))
 
     for event_code, ev in df.groupby("event_code"):
         output[event_code] = {}
@@ -614,12 +760,12 @@ def compute_rating_transitions(df_ratings: pd.DataFrame, yearly_field_stats: dic
 
             for from_cls, to_cls in TRANSITIONS:
                 merged = _merge_class_transition(g, from_cls, to_cls)
-                block  = _build_rating_transition_block(merged, field_curve)
+                block  = _build_rating_transition_block(merged, field_curve, event_code)
                 if block:
                     output[event_code][gender][f"{from_cls}_to_{to_cls}"] = block
 
             merged = _merge_class_transition(g, "FR", "SR")
-            block  = _build_rating_transition_block(merged, field_curve)
+            block  = _build_rating_transition_block(merged, field_curve, event_code)
             if block:
                 output[event_code][gender]["FR_to_SR"] = block
 
@@ -762,11 +908,11 @@ def run_analysis(db_path=DB_PATH) -> dict:
     logger.info("Computing ratings …")
     df_ratings = compute_ratings(df_marks)
 
-    logger.info("Computing rating transitions …")
-    rating_trans = compute_rating_transitions(df_ratings, yearly_field_stats)
-
     logger.info("Computing percentile tables …")
     pct_tables = compute_percentile_tables(df_marks)
+
+    logger.info("Computing rating transitions …")
+    rating_trans = compute_rating_transitions(df_ratings, yearly_field_stats)
 
     curves = compute_aggregate_curves(progression)
 

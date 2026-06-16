@@ -7215,3 +7215,105 @@
   ]
 }
 2026-06-14 15:29:11,929 [INFO] main: Done in 1425.2 s
+2026-06-14 18:41:42,017 [INFO] analyze_progression: Loading data from C:\Users\nicho\Desktop\Projects\data-accuracy\tfrrs.db …
+2026-06-14 18:41:58,309 [INFO] analyze_progression: Loaded 241664 best-mark rows (focus events)
+2026-06-14 18:41:59,220 [INFO] analyze_progression: Loaded 68712 season rows
+2026-06-14 18:41:59,220 [INFO] analyze_progression: Computing year-by-year NCAA field percentiles …
+2026-06-14 18:41:59,512 [INFO] analyze_progression: Computing progression curves …
+2026-06-14 18:58:48,355 [INFO] analyze_progression: Persisted 50 progression_stats rows
+2026-06-14 18:58:48,355 [INFO] analyze_progression: Computing breakout rates …
+2026-06-14 19:22:26,512 [INFO] analyze_progression: Computing attrition …
+2026-06-14 19:22:26,750 [INFO] analyze_progression: Computing ratings …
+2026-06-14 19:22:27,412 [INFO] analyze_progression: Computing rating transitions …
+2026-06-14 19:22:36,526 [INFO] analyze_progression: Computing percentile tables …
+2026-06-14 19:22:36,693 [INFO] analyze_progression:   Wrote development_curves.json (11563 bytes)
+2026-06-14 19:22:36,701 [INFO] analyze_progression:   Wrote attrition_rates.json (686 bytes)
+2026-06-14 19:22:38,068 [INFO] analyze_progression:   Wrote breakout_rates.json (14474402 bytes)
+2026-06-14 19:22:39,121 [INFO] analyze_progression:   Wrote rating_transitions.json (17174279 bytes)
+2026-06-14 19:22:39,125 [INFO] analyze_progression:   Wrote percentile_tables.json (1918 bytes)
+2026-06-14 19:22:39,125 [INFO] analyze_progression:   Wrote progression_full.json (46099 bytes)
+2026-06-14 19:22:39,138 [INFO] analyze_progression:   Wrote yearly_trends.json (41025 bytes)
+2026-06-14 19:22:39,209 [INFO] analyze_progression:   Wrote analysis_summary.json (204 bytes)
+2026-06-14 19:22:39,209 [INFO] analyze_progression: Analysis complete. Outputs in C:\Users\nicho\Desktop\Projects\data-accuracy\output
+2026-06-14 19:22:39,309 [INFO] main: [OK] Analysis summary:
+{
+  "events_analysed": 10,
+  "athletes_rated": 21121,
+  "total_results": 241664,
+  "attrition_keys": [
+    "FR_to_SO",
+    "SO_to_JR",
+    "JR_to_SR",
+    "SR_to_5TH",
+    "SR_graduation"
+  ]
+}
+2026-06-14 19:22:39,309 [INFO] main: Done in 2467.3 s
+2026-06-15 13:02:33,179 [INFO] analyze_progression: Loading data from C:\Users\nicho\Desktop\Projects\data-accuracy\tfrrs.db …
+2026-06-15 13:02:52,167 [INFO] analyze_progression: Loaded 241664 best-mark rows (focus events)
+2026-06-15 13:02:53,088 [INFO] analyze_progression: Loaded 68712 season rows
+2026-06-15 13:02:53,089 [INFO] analyze_progression: Computing year-by-year NCAA field percentiles …
+2026-06-15 13:02:53,381 [INFO] analyze_progression: Computing progression curves …
+2026-06-15 13:11:59,525 [INFO] analyze_progression: Persisted 40 progression_stats rows
+2026-06-15 13:11:59,526 [INFO] analyze_progression: Computing breakout rates …
+2026-06-15 13:39:31,348 [INFO] analyze_progression: Computing attrition …
+2026-06-15 13:39:31,545 [INFO] analyze_progression: Computing ratings …
+2026-06-15 13:39:32,024 [INFO] analyze_progression: Computing rating transitions …
+2026-06-15 13:39:40,238 [INFO] analyze_progression: Computing percentile tables …
+2026-06-15 13:39:40,352 [INFO] analyze_progression:   Wrote development_curves.json (9320 bytes)
+2026-06-15 13:39:40,352 [INFO] analyze_progression:   Wrote attrition_rates.json (686 bytes)
+2026-06-15 13:39:41,392 [INFO] analyze_progression:   Wrote breakout_rates.json (14474402 bytes)
+2026-06-15 13:39:42,607 [INFO] analyze_progression:   Wrote rating_transitions.json (17174212 bytes)
+2026-06-15 13:39:42,611 [INFO] analyze_progression:   Wrote percentile_tables.json (1918 bytes)
+2026-06-15 13:39:42,616 [INFO] analyze_progression:   Wrote progression_full.json (36990 bytes)
+2026-06-15 13:39:42,625 [INFO] analyze_progression:   Wrote yearly_trends.json (41025 bytes)
+2026-06-15 13:39:42,680 [INFO] analyze_progression:   Wrote analysis_summary.json (204 bytes)
+2026-06-15 13:39:42,682 [INFO] analyze_progression: Analysis complete. Outputs in C:\Users\nicho\Desktop\Projects\data-accuracy\output
+2026-06-15 13:39:42,841 [INFO] main: [OK] Analysis summary:
+{
+  "events_analysed": 10,
+  "athletes_rated": 21121,
+  "total_results": 241664,
+  "attrition_keys": [
+    "FR_to_SO",
+    "SO_to_JR",
+    "JR_to_SR",
+    "SR_to_5TH",
+    "SR_graduation"
+  ]
+}
+2026-06-15 13:39:42,841 [INFO] main: Done in 2234.6 s
+2026-06-15 16:35:32,869 [INFO] analyze_progression: Loading data from C:\Users\nicho\Desktop\Projects\data-accuracy\tfrrs.db …
+2026-06-15 16:35:44,432 [INFO] analyze_progression: Loaded 241509 best-mark rows (focus events)
+2026-06-15 16:35:45,202 [INFO] analyze_progression: Loaded 68712 season rows
+2026-06-15 16:35:45,204 [INFO] analyze_progression: Computing year-by-year NCAA field percentiles …
+2026-06-15 16:35:45,490 [INFO] analyze_progression: Computing progression curves …
+2026-06-15 16:41:39,193 [INFO] analyze_progression: Persisted 40 progression_stats rows
+2026-06-15 16:41:39,193 [INFO] analyze_progression: Computing breakout rates …
+2026-06-15 16:53:51,866 [INFO] analyze_progression: Computing attrition …
+2026-06-15 16:53:52,066 [INFO] analyze_progression: Computing ratings …
+2026-06-15 16:53:52,564 [INFO] analyze_progression: Computing percentile tables …
+2026-06-15 16:53:52,679 [INFO] analyze_progression: Computing rating transitions …
+2026-06-15 17:25:19,173 [INFO] analyze_progression:   Wrote development_curves.json (9293 bytes)
+2026-06-15 17:25:19,173 [INFO] analyze_progression:   Wrote attrition_rates.json (686 bytes)
+2026-06-15 17:25:20,250 [INFO] analyze_progression:   Wrote breakout_rates.json (14456336 bytes)
+2026-06-15 17:25:20,253 [INFO] analyze_progression:   Wrote rating_transitions.json (473 bytes)
+2026-06-15 17:25:20,256 [INFO] analyze_progression:   Wrote percentile_tables.json (1913 bytes)
+2026-06-15 17:25:20,259 [INFO] analyze_progression:   Wrote progression_full.json (36985 bytes)
+2026-06-15 17:25:20,266 [INFO] analyze_progression:   Wrote yearly_trends.json (41031 bytes)
+2026-06-15 17:25:20,317 [INFO] analyze_progression:   Wrote analysis_summary.json (204 bytes)
+2026-06-15 17:25:20,317 [INFO] analyze_progression: Analysis complete. Outputs in C:\Users\nicho\Desktop\Projects\data-accuracy\output
+2026-06-15 17:25:20,380 [INFO] main: [OK] Analysis summary:
+{
+  "events_analysed": 10,
+  "athletes_rated": 21121,
+  "total_results": 241509,
+  "attrition_keys": [
+    "FR_to_SO",
+    "SO_to_JR",
+    "JR_to_SR",
+    "SR_to_5TH",
+    "SR_graduation"
+  ]
+}
+2026-06-15 17:25:20,380 [INFO] main: Done in 2988.3 s

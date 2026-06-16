@@ -79,22 +79,30 @@ This script does only three things:
 import json
 import logging
 import argparse
+import csv
 import sqlite3
 from pathlib import Path
 
 from database import get_connection, DB_PATH
+from event_bounds import sql_plausible_time_where
+from analyze_progression import FOCUS_CODES
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
+ROOT_DIR = Path(__file__).parent
+
+DEFAULT_CONF_CSV   = ROOT_DIR / "ncaa_d1_xc_teams.csv"
+DEFAULT_REGION_CSV = ROOT_DIR / "ncaa_d1_xc_teams_by_region.csv"
 
 # Must stay in sync with analyze_progression.py
 TRANSITIONS    = [("FR", "SO"), ("SO", "JR"), ("JR", "SR"), ("SR", "5TH")]
 ELIGIBLE_CLASSES = {"FR", "SO", "JR"}
-CURRENT_SEASON = 2025
-MIN_DECILE_SAMPLES = 5   # smaller buckets are dropped; JS falls back to "all"
+CURRENT_SEASON = 2026
+MIN_DECILE_SAMPLES = 5   # smaller buckets are dropped; JS falls back to row pool
+MIN_CELL_SAMPLES   = 3   # minimum pairs in a start→end decile cell
 
 # ─────────────────────────────────────────────────────────────────────────────
 # I/O helpers
@@ -114,19 +122,54 @@ def _write_json(filename: str, data) -> None:
     logger.info("Wrote %s  (%d bytes)", p, p.stat().st_size)
 
 
-def _load_conference_maps(conf_path: Path, region_path: Path) -> tuple[dict, dict]:
-    conf_map, region_map = {}, {}
+def _load_team_maps_from_csv(
+    conf_path: Path,
+    region_path: Path,
+) -> tuple[dict[str, str], dict[str, str], list[str], list[str]]:
+    """
+    Load school → conference / region maps from the NCAA D1 XC CSV files.
+    Team names must match DB school_name exactly; unmatched schools are ignored.
+    """
+    conf_map: dict[str, str] = {}
+    all_conferences: set[str] = set()
     if conf_path.exists():
-        conf_map = json.loads(conf_path.read_text())
-        logger.info("Loaded conference map: %d schools", len(conf_map))
+        with conf_path.open(newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                team = (row.get("Team") or row.get("team") or "").strip()
+                conf = (row.get("Conference") or row.get("conference") or "").strip()
+                if team and conf:
+                    conf_map[team] = conf
+                    all_conferences.add(conf)
+        logger.info(
+            "Loaded conference CSV: %d teams, %d conferences",
+            len(conf_map), len(all_conferences),
+        )
     else:
-        logger.warning("conference_map.json not found at %s", conf_path)
+        logger.warning("Conference CSV not found at %s", conf_path)
+
+    region_map: dict[str, str] = {}
+    all_regions: set[str] = set()
     if region_path.exists():
-        region_map = json.loads(region_path.read_text())
-        logger.info("Loaded region map: %d schools", len(region_map))
+        with region_path.open(newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                team = (row.get("Team") or row.get("team") or "").strip()
+                region = (row.get("Region") or row.get("region") or "").strip()
+                if team and region:
+                    region_map[team] = region
+                    all_regions.add(region)
+        logger.info(
+            "Loaded region CSV: %d teams, %d regions",
+            len(region_map), len(all_regions),
+        )
     else:
-        logger.warning("region_map.json not found at %s", region_path)
-    return conf_map, region_map
+        logger.warning("Region CSV not found at %s", region_path)
+
+    return (
+        conf_map,
+        region_map,
+        sorted(all_conferences),
+        sorted(all_regions),
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -177,7 +220,7 @@ def build_athlete_roster(
     {_CLASS_YEAR_CTE}
     SELECT
         a.athlete_id,
-        a.name,
+        a.athlete_name AS name,
         sc.school_name,
         a.gender,
         ac.class_year,
@@ -193,9 +236,10 @@ def build_athlete_roster(
     WHERE r.season_year       = ?
       AND r.time_seconds IS NOT NULL
       AND r.time_seconds      > 0
+      AND {sql_plausible_time_where("r")}
       AND ac.class_year IN ('FR','SO','JR')
     GROUP BY a.athlete_id, r.event_code
-    ORDER BY a.name
+    ORDER BY a.athlete_name
     """
 
     cur  = conn.execute(sql, (current_season,))
@@ -282,84 +326,101 @@ def annotate_athlete_deciles(athletes: dict, percentile_tables: dict) -> None:
 # 3. Reformat improvement distributions  (from rating_transitions.json — no DB)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _bucket_pairs(pairs: list[list]) -> dict[str, list]:
-    """
-    Convert a list of [from_rating, imp_pct] pairs from rating_transitions.json
-    into {"all": [...], "1": [...], ..., "10": [...]} buckets.
-
-    Buckets with fewer than MIN_DECILE_SAMPLES entries are dropped so the JS
-    sampler falls back to "all" gracefully rather than over-fitting tiny groups.
-    """
-    buckets: dict[str, list] = {"all": [], **{str(d): [] for d in range(1, 11)}}
-
-    for rating, imp in pairs:
-        decile = _rating_to_decile(float(rating))
-        imp    = round(float(imp), 4)
-        buckets["all"].append(imp)
-        buckets[str(decile)].append(imp)
-
-    pruned: dict[str, list] = {"all": buckets["all"]}
-    for d in range(1, 11):
-        if len(buckets[str(d)]) >= MIN_DECILE_SAMPLES:
-            pruned[str(d)] = buckets[str(d)]
-
+def _prune_cell_map(by_cell: dict) -> dict:
+    """Drop sparse start→end decile cells; keep structure for JS fallbacks."""
+    pruned: dict = {}
+    for fd, to_map in by_cell.items():
+        row: dict = {}
+        for td, imps in to_map.items():
+            if len(imps) >= MIN_CELL_SAMPLES:
+                row[td] = imps
+        if row:
+            pruned[fd] = row
     return pruned
 
 
-def build_improvement_distributions(
+def _prune_from_decile_map(by_from: dict) -> dict:
+    pruned: dict = {}
+    for fd, imps in by_from.items():
+        if len(imps) >= MIN_DECILE_SAMPLES:
+            pruned[fd] = imps
+    return pruned
+
+
+def _cells_from_triples(triples: list) -> dict:
+    by_cell: dict = {}
+    for fd, td, imp in triples:
+        fd_s, td_s = str(fd), str(td)
+        by_cell.setdefault(fd_s, {}).setdefault(td_s, []).append(float(imp))
+    return by_cell
+
+
+def _from_decile_from_triples(triples: list) -> dict:
+    by_from: dict = {}
+    for fd, _td, imp in triples:
+        by_from.setdefault(str(fd), []).append(float(imp))
+    return by_from
+
+
+def _from_decile_from_improvements(pairs: list) -> dict:
+    """Legacy fallback when rating_transitions predates cell bucketing."""
+    by_from: dict = {}
+    for rating, imp in pairs:
+        d = str(_rating_to_decile(float(rating)))
+        by_from.setdefault(d, []).append(round(float(imp), 4))
+    return _prune_from_decile_map(by_from)
+
+
+def build_transition_distributions(
     rating_transitions: dict,
-) -> tuple[dict, dict]:
+) -> dict:
     """
-    Reformat rating_transitions.json into per-decile improvement arrays.
+    Package matrix + per-cell improvement arrays for the JS Monte Carlo engine.
 
-    analyze_progression.py already stores every athlete's paired
-    (from_rating, improvement_pct) in:
-      rating_transitions[event][gender][transition]["improvements"]
-      rating_transitions[event][gender][transition]["improvements_discounted"]
-
-    We bucket those pre-computed values by decile — no DB queries, no re-pairing.
-
-    Returns:
-      (raw_distributions, discounted_distributions)
-
-    Both share the JS-compatible shape:
-      {event_code: {gender: {transition: {"all": [...], "1": [...], ..., "10": [...]}}}}
+    Each transition block mirrors rating_transitions.json but only includes
+    fields the simulator needs:
+      {event: {gender: {transition: {
+          matrix, improvements_by_cell, improvements_by_from_decile
+      }}}}
     """
-    raw_out:  dict = {}
-    disc_out: dict = {}
+    out: dict = {}
     valid_trans = {f"{f}_to_{t}" for f, t in TRANSITIONS}
 
     for event_code, genders in rating_transitions.items():
         for gender, transitions in genders.items():
             for trans_key, block in transitions.items():
                 if trans_key not in valid_trans:
-                    continue  # skip FR_to_SR career block — not used by predictor
+                    continue
+                matrix  = block.get("matrix")
+                by_cell = block.get("improvements_by_cell")
+                by_from = block.get("improvements_by_from_decile")
+                triples = block.get("improvement_triples", [])
 
-                raw_pairs  = block.get("improvements", [])
-                disc_pairs = block.get("improvements_discounted", [])
+                if not by_cell and triples:
+                    by_cell = _cells_from_triples(triples)
+                if not by_from and triples:
+                    by_from = _from_decile_from_triples(triples)
+                if not by_from:
+                    by_from = _from_decile_from_improvements(block.get("improvements", []))
 
-                if raw_pairs:
-                    bucketed = _bucket_pairs(raw_pairs)
-                    if len(bucketed["all"]) >= 10:
-                        raw_out.setdefault(event_code, {}).setdefault(gender, {})[trans_key] = bucketed
-
-                if disc_pairs:
-                    bucketed = _bucket_pairs(disc_pairs)
-                    if len(bucketed["all"]) >= 10:
-                        disc_out.setdefault(event_code, {}).setdefault(gender, {})[trans_key] = bucketed
+                by_cell = _prune_cell_map(by_cell or {})
+                by_from = _prune_from_decile_map(by_from or {})
+                if not matrix or not by_from:
+                    continue
+                out.setdefault(event_code, {}).setdefault(gender, {})[trans_key] = {
+                    "matrix":                      matrix,
+                    "improvements_by_cell":        by_cell,
+                    "improvements_by_from_decile": by_from,
+                }
 
     n_blocks = sum(
-        1
-        for ev in raw_out.values()
-        for g in ev.values()
-        for t in g.values()
-        if t.get("all")
+        1 for ev in out.values() for g in ev.values() for _ in g.values()
     )
     logger.info(
-        "Built improvement distributions: %d blocks (from rating_transitions.json — no DB query)",
+        "Built transition distributions: %d blocks (matrix + decile cells)",
         n_blocks,
     )
-    return raw_out, disc_out
+    return out
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -370,13 +431,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--conf-map",
-        default=r"output\conference_map.json",
-        help="Path to conference_map.json (output of extract_conferences.py)",
+        default=str(DEFAULT_CONF_CSV),
+        help="Path to ncaa_d1_xc_teams.csv (Team, Conference columns)",
     )
     parser.add_argument(
         "--region-map",
-        default="output/region_map.json",
-        help="Path to region_map.json",
+        default=str(DEFAULT_REGION_CSV),
+        help="Path to ncaa_d1_xc_teams_by_region.csv (Team, Region columns)",
     )
     parser.add_argument(
         "--season",
@@ -386,7 +447,7 @@ def main():
     )
     args = parser.parse_args()
 
-    conf_map, region_map = _load_conference_maps(
+    conf_map, region_map, all_conferences, all_regions = _load_team_maps_from_csv(
         Path(args.conf_map), Path(args.region_map)
     )
 
@@ -397,31 +458,27 @@ def main():
 
     # 1. Roster — the only step that opens the DB.
     logger.info("Building athlete roster (DB query) …")
-    conn     = get_connection()
-    athletes = build_athlete_roster(conn, conf_map, region_map, args.season)
-    conn.close()
+    with get_connection() as conn:
+        athletes = build_athlete_roster(conn, conf_map, region_map, args.season)
 
     # 2. Decile annotation — pure dict lookup, no DB.
     logger.info("Annotating athlete deciles …")
     annotate_athlete_deciles(athletes, percentile_tables)
 
-    # 3. Improvement distributions — reformats rating_transitions.json, no DB.
-    logger.info("Building improvement distributions from rating_transitions.json …")
-    improvement_distributions, improvement_distributions_discounted = (
-        build_improvement_distributions(rating_transitions)
-    )
+    # 3. Transition distributions — matrix + decile cells from rating_transitions.json.
+    logger.info("Building transition distributions from rating_transitions.json …")
+    transition_distributions = build_transition_distributions(rating_transitions)
 
-    conferences = sorted({a["conference"] for a in athletes.values() if a["conference"]})
-    xc_regions  = sorted({a["xc_region"]  for a in athletes.values() if a["xc_region"]})
+    conferences = all_conferences
+    xc_regions  = all_regions
 
     bundle = {
-        "athletes":                              athletes,
-        "improvement_distributions":             improvement_distributions,
-        "improvement_distributions_discounted":  improvement_distributions_discounted,
-        "percentile_benchmarks":                 percentile_tables,   # passed through as-is
-        "conferences":                           conferences,
-        "xc_regions":                            xc_regions,
-        "current_season":                        args.season,
+        "athletes":                   athletes,
+        "transition_distributions":   transition_distributions,
+        "percentile_benchmarks":      percentile_tables,
+        "conferences":                conferences,
+        "xc_regions":                 xc_regions,
+        "current_season":             args.season,
     }
 
     _write_json("montecarlo_data.json", bundle)
