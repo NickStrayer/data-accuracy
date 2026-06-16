@@ -38,6 +38,7 @@ from event_bounds import sql_plausible_time_where
 
 DB_PATH     = Path(__file__).parent / "tfrrs.db"
 OUTPUT_PATH = Path(__file__).parent / "output" / "dashboard.html"
+DOCS_PATH   = Path(__file__).parent / "docs" / "index.html"
 
 # Keep in sync with analyze_progression.FOCUS_EVENTS
 FOCUS_EVENT_ORDER = [
@@ -263,50 +264,59 @@ def generate_html(data: dict) -> str:
     --good:     #22d3a0;
     --warn:     #f59e0b;
     --bad:      #f87171;
+    --content-max: 100rem;
+    --pad-x: clamp(0.75rem, 4vw, 2.5rem);
+    --pad-y: clamp(1rem, 3vw, 2rem);
+    --chart-h: clamp(11rem, 38vw, 17.5rem);
+    --chart-h-tall: clamp(13rem, 45vw, 21.25rem);
+    --chart-h-short: clamp(9rem, 30vw, 13.75rem);
   }}
 
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+
+  html {{
+    overflow-x: clip;
+    -webkit-text-size-adjust: 100%;
+  }}
 
   body {{
     background: var(--bg);
     color: var(--text);
     font-family: 'Barlow', sans-serif;
-    font-size: 14px;
+    font-size: 0.875rem;
     min-height: 100vh;
+    overflow-x: clip;
+    max-width: 100%;
   }}
 
-  header {{
-    background: linear-gradient(135deg, #0a0e1a 0%, #0d1929 50%, #0a1628 100%);
-    border-bottom: 1px solid var(--border);
-    padding: 24px 40px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    position: sticky; top: 0; z-index: 100;
+  img, video, svg {{
+    max-width: 100%;
+    height: auto;
+    display: block;
   }}
-  header h1 {{
-    font-family: 'Barlow Condensed', sans-serif;
-    font-size: 28px; font-weight: 800; letter-spacing: 2px;
-    text-transform: uppercase;
-    background: linear-gradient(90deg, var(--accent), var(--accent2));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  }}
-  header p {{ color: var(--muted); font-size: 12px; letter-spacing: 1px; }}
 
   nav {{
     background: var(--surface);
     border-bottom: 1px solid var(--border);
-    padding: 0 40px;
-    display: flex; gap: 4px;
+    padding: 0 var(--pad-x);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    max-width: 100%;
+    position: sticky;
+    top: 0;
+    z-index: 100;
   }}
   nav button {{
     background: none; border: none; color: var(--muted);
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 13px; font-weight: 600; letter-spacing: 1.5px;
+    font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.1em;
     text-transform: uppercase;
-    padding: 14px 20px; cursor: pointer;
+    padding: 0.875rem 1.125rem; cursor: pointer;
     border-bottom: 2px solid transparent;
     transition: all 0.2s;
+    flex: 0 1 auto;
+    white-space: nowrap;
   }}
   nav button:hover {{ color: var(--text); }}
   nav button.active {{
@@ -314,35 +324,59 @@ def generate_html(data: dict) -> str:
     border-bottom-color: var(--accent);
   }}
 
-  main {{ padding: 32px 40px; max-width: 1600px; margin: 0 auto; }}
+  main {{
+    padding: var(--pad-y) var(--pad-x);
+    max-width: var(--content-max);
+    width: 100%;
+    margin: 0 auto;
+  }}
 
-  .tab-pane {{ display: none; }}
+  .tab-pane {{ display: none; max-width: 100%; }}
   .tab-pane.active {{ display: block; }}
 
-  .grid-4 {{ display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 28px; }}
-  .grid-2 {{ display: grid; grid-template-columns: 1fr 1fr;       gap: 24px; margin-bottom: 28px; }}
-  .grid-3 {{ display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; margin-bottom: 28px; }}
-  .full  {{ grid-column: 1 / -1; }}
+  .grid-4 {{
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.75rem;
+  }}
+  .grid-2 {{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.75rem;
+  }}
+  .grid-3 {{
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.75rem;
+  }}
+  .full {{ grid-column: 1 / -1; }}
 
   .card {{
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 20px;
+    border-radius: 0.625rem;
+    padding: clamp(0.875rem, 3vw, 1.25rem);
+    max-width: 100%;
+    min-width: 0;
   }}
   .card-title {{
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 11px; font-weight: 700; letter-spacing: 2px;
+    font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.12em;
     text-transform: uppercase; color: var(--muted);
-    margin-bottom: 12px;
+    margin-bottom: 0.75rem;
   }}
 
   .kpi {{
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 20px 24px;
-    position: relative; overflow: hidden;
+    border-radius: 0.625rem;
+    padding: clamp(1rem, 3vw, 1.25rem) clamp(1rem, 3vw, 1.5rem);
+    position: relative;
+    overflow: hidden;
+    min-width: 0;
   }}
   .kpi::before {{
     content: '';
@@ -353,106 +387,179 @@ def generate_html(data: dict) -> str:
   .kpi.green::before  {{ background: var(--accent3); }}
   .kpi.warn::before   {{ background: var(--warn);    }}
   .kpi-label {{
-    font-size: 11px; font-weight: 600; letter-spacing: 2px;
+    font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.12em;
     text-transform: uppercase; color: var(--muted);
-    margin-bottom: 8px;
+    margin-bottom: 0.5rem;
   }}
   .kpi-value {{
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 38px; font-weight: 800; line-height: 1;
+    font-size: clamp(1.625rem, 6vw, 2.375rem);
+    font-weight: 800; line-height: 1;
     color: var(--text);
+    word-break: break-word;
   }}
-  .kpi-sub {{ font-size: 12px; color: var(--muted); margin-top: 4px; }}
+  .kpi-sub {{ font-size: 0.75rem; color: var(--muted); margin-top: 0.25rem; }}
 
-  .chart-wrap {{ position: relative; height: 280px; }}
-  .chart-wrap.tall  {{ height: 340px; }}
-  .chart-wrap.short {{ height: 220px; }}
+  .chart-wrap {{
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    min-height: var(--chart-h);
+    height: var(--chart-h);
+  }}
+  .chart-wrap.tall  {{ min-height: var(--chart-h-tall); height: var(--chart-h-tall); }}
+  .chart-wrap.short {{ min-height: var(--chart-h-short); height: var(--chart-h-short); }}
+  .chart-wrap canvas {{ max-width: 100%; }}
 
   .controls {{
-    display: flex; gap: 10px; flex-wrap: wrap;
-    margin-bottom: 20px; align-items: center;
+    display: flex;
+    gap: 0.625rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+    align-items: center;
+    max-width: 100%;
   }}
   select, .btn-group button {{
     background: var(--surface2);
     border: 1px solid var(--border);
     color: var(--text);
-    border-radius: 6px;
-    padding: 8px 14px;
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.625rem;
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 12px; letter-spacing: 1px; font-weight: 600;
+    font-size: 0.6875rem; letter-spacing: 0.05em; font-weight: 600;
     text-transform: uppercase;
     cursor: pointer; transition: all 0.2s;
+    max-width: 100%;
+  }}
+  select {{
+    flex: 0 1 auto;
+    width: auto;
+    max-width: 100%;
+    min-width: 0;
   }}
   select:focus {{ outline: none; border-color: var(--accent); }}
-  .btn-group {{ display: flex; gap: 4px; }}
+  .btn-group {{
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+    max-width: 100%;
+  }}
+  .btn-group button {{ flex: 0 1 auto; }}
   .btn-group button:hover  {{ border-color: var(--accent); color: var(--accent); }}
   .btn-group button.active {{
     background: var(--accent); border-color: var(--accent);
     color: #0a0e1a;
   }}
 
-  .progress-row {{ display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }}
-  .progress-label {{ width: 120px; font-size: 12px; color: var(--muted); }}
-  .progress-bar-bg {{ flex: 1; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }}
-  .progress-bar    {{ height: 100%; border-radius: 4px; transition: width 0.6s ease; }}
-  .progress-val    {{
-    width: 48px; text-align: right;
+  .progress-row {{
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.625rem;
+    flex-wrap: wrap;
+    max-width: 100%;
+  }}
+  .progress-label {{
+    flex: 1 1 6rem;
+    min-width: 0;
+    max-width: 100%;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }}
+  .progress-bar-bg {{
+    flex: 2 1 8rem;
+    min-width: 0;
+    height: 0.5rem;
+    background: var(--surface2);
+    border-radius: 0.25rem;
+    overflow: hidden;
+  }}
+  .progress-bar {{ height: 100%; border-radius: 0.25rem; transition: width 0.6s ease; }}
+  .progress-val {{
+    flex: 0 0 auto;
+    text-align: right;
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 14px; font-weight: 700;
+    font-size: 0.875rem; font-weight: 700;
   }}
 
-  .data-table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+  .data-table {{ width: 100%; border-collapse: collapse; font-size: 0.8125rem; }}
   .data-table th {{
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+    font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.1em;
     text-transform: uppercase; color: var(--muted);
-    padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left;
+    padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); text-align: left;
   }}
   .data-table td {{
-    padding: 9px 12px;
+    padding: 0.5625rem 0.75rem;
     border-bottom: 1px solid rgba(30,45,69,0.5);
     color: var(--text);
   }}
   .data-table tr:hover td {{ background: var(--surface2); }}
   .data-table .num {{
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 15px; font-weight: 600; color: var(--accent);
+    font-size: 0.9375rem; font-weight: 600; color: var(--accent);
   }}
 
-  .pct-ruler {{ display: flex; border-radius: 6px; overflow: hidden; height: 32px; margin: 8px 0; }}
-  .pct-seg   {{
+  .pct-ruler {{
+    display: flex;
+    border-radius: 0.375rem;
+    overflow: hidden;
+    min-height: 2rem;
+    height: auto;
+    margin: 0.5rem 0;
+    max-width: 100%;
+  }}
+  .pct-seg {{
     display: flex; align-items: center; justify-content: center;
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 11px; font-weight: 700; color: #0a0e1a; flex: 1;
+    font-size: 0.6875rem; font-weight: 700; color: #0a0e1a; flex: 1;
+    min-width: 0;
+    padding: 0.25rem 0.125rem;
+    word-break: break-word;
+    text-align: center;
   }}
 
   .section-title {{
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 20px; font-weight: 800; letter-spacing: 1px;
+    font-size: clamp(1rem, 3.5vw, 1.25rem);
+    font-weight: 800; letter-spacing: 0.06em;
     text-transform: uppercase;
-    margin-bottom: 20px; padding-bottom: 10px;
+    margin-bottom: 1.25rem; padding-bottom: 0.625rem;
     border-bottom: 1px solid var(--border);
     color: var(--text);
+    word-break: break-word;
   }}
   .section-title span {{ color: var(--accent); }}
 
+  .muted-note {{ color: var(--muted); font-size: 0.8125rem; line-height: 1.55; }}
+  .muted-note.tight {{ margin: -0.25rem 0 1rem; }}
+  .muted-note.loose {{ margin-bottom: 1.5rem; }}
+
   .empty-state {{
-    text-align: center; padding: 40px;
-    color: var(--muted); font-size: 13px;
+    text-align: center; padding: 2.5rem 1rem;
+    color: var(--muted); font-size: 0.8125rem;
+  }}
+
+  .scroll-panel {{
+    padding: 0.5rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
   }}
 
   .tier-matrix-grid {{
     display: grid;
-    grid-template-columns: 36px 1fr;
+    grid-template-columns: minmax(1.5rem, 2.25rem) minmax(0, 1fr);
     grid-template-rows: auto 1fr;
-    gap: 8px 12px;
+    gap: 0.5rem 0.75rem;
     align-items: center;
+    max-width: 100%;
   }}
   .tier-matrix-axis-top {{
     grid-column: 2;
     text-align: center;
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 11px; font-weight: 700; letter-spacing: 2px;
+    font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.12em;
     text-transform: uppercase; color: var(--muted);
   }}
   .tier-matrix-axis-left {{
@@ -461,24 +568,37 @@ def generate_html(data: dict) -> str:
     transform: rotate(180deg);
     text-align: center;
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 11px; font-weight: 700; letter-spacing: 2px;
+    font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.12em;
     text-transform: uppercase; color: var(--muted);
   }}
   .tier-matrix-table {{
     grid-column: 2;
     grid-row: 2;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
   }}
 
+  .eval-time-label {{
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    font-size: 0.75rem;
+    color: var(--muted);
+    max-width: 100%;
+  }}
   .eval-time-input {{
     background: var(--surface2);
     border: 1px solid var(--border);
     color: var(--text);
-    border-radius: 6px;
-    padding: 8px 14px;
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.875rem;
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 18px; font-weight: 600;
-    width: 148px;
+    font-size: 1.125rem; font-weight: 600;
+    width: 100%;
+    max-width: 9.25rem;
+    min-width: 0;
   }}
   .eval-time-input:focus {{
     outline: none;
@@ -487,48 +607,240 @@ def generate_html(data: dict) -> str:
   .eval-snap {{
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px 20px;
+    border-radius: 0.625rem;
+    padding: 1rem 1.25rem;
+    min-width: 0;
   }}
   .eval-snap-label {{
-    font-size: 11px; font-weight: 600; letter-spacing: 2px;
+    font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.12em;
     text-transform: uppercase; color: var(--muted);
-    margin-bottom: 6px;
+    margin-bottom: 0.375rem;
   }}
   .eval-snap-value {{
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 28px; font-weight: 800; line-height: 1.1;
+    font-size: clamp(1.25rem, 5vw, 1.75rem);
+    font-weight: 800; line-height: 1.1;
+    word-break: break-word;
+  }}
+
+  .table-scroll {{
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }}
+  .table-scroll > table {{ min-width: min(32.5rem, 200%); }}
+
+  .breakout-slider-row {{
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    flex-wrap: wrap;
+    padding: 0.25rem 0;
+    max-width: 100%;
+  }}
+  .breakout-slider-track {{
+    position: relative;
+    flex: 1 1 10rem;
+    min-width: 0;
+    max-width: 100%;
+    height: 1.5rem;
+  }}
+  .br-pct-lbl {{
+    font-size: 0.8125rem;
+    font-weight: 700;
+    flex: 0 0 auto;
+  }}
+  .br-pct-lbl.min {{ color: var(--accent); }}
+  .br-pct-lbl.max {{ color: var(--accent2); }}
+  #breakout-range-slider {{ width: 100%; min-width: 0; }}
+
+  .info-callout {{
+    margin-bottom: 1rem;
+    padding: 0.75rem 0.875rem;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 0.5rem;
+    background: var(--surface);
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    max-width: 100%;
+  }}
+  .info-callout p {{ margin: 0 0 0.5rem; }}
+  .info-callout p:last-child {{ margin-bottom: 0; }}
+
+  .text-input {{
+    width: 100%;
+    max-width: 15rem;
+    min-width: 0;
+    padding: 0.375rem 0.625rem;
+    border-radius: 0.375rem;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 0.8125rem;
+  }}
+  .pred-search-row {{
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    flex-wrap: wrap;
+    margin: 0.875rem 0 0.375rem;
+    max-width: 100%;
+  }}
+  .pred-dropdown {{
+    display: none;
+    max-height: 12.5rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    background: var(--surface2);
+    margin-bottom: 0.75rem;
+    font-size: 0.8125rem;
+    max-width: 100%;
+  }}
+  .pred-chosen-card {{
+    display: none;
+    margin-bottom: 0.875rem;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid var(--accent);
+    border-radius: 0.5rem;
+    background: var(--surface);
+    font-size: 0.8125rem;
+    max-width: 100%;
+    word-break: break-word;
+  }}
+  .pred-meta-row {{
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.375rem;
+    max-width: 100%;
+  }}
+  .pred-meta-row .push-right {{ margin-left: auto; }}
+  .pred-run-row {{
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    max-width: 100%;
+  }}
+  .btn-primary {{
+    padding: 0.5rem 1.375rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    flex-shrink: 0;
+  }}
+
+  @media (max-width: 768px) {{
+    nav {{
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      gap: 0;
+    }}
+    nav button {{
+      flex-shrink: 0;
+      padding: 0.75rem 0.875rem;
+      font-size: 0.6875rem;
+    }}
+
+    .grid-4 {{ grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }}
+    .grid-2, .grid-3 {{ grid-template-columns: minmax(0, 1fr); gap: 1rem; }}
+
+    .controls {{
+      flex-direction: row;
+      align-items: center;
+      gap: 0.5rem;
+    }}
+    .controls select {{
+      flex: 0 1 auto;
+      width: auto;
+      max-width: calc(50% - 0.25rem);
+      padding: 0.3125rem 0.5rem;
+      font-size: 0.6875rem;
+    }}
+    .controls .btn-group {{
+      flex: 0 1 auto;
+      width: auto;
+    }}
+    .controls .btn-group button {{
+      flex: 0 0 auto;
+      padding: 0.3125rem 0.5rem;
+      font-size: 0.625rem;
+      letter-spacing: 0.04em;
+    }}
+    .eval-time-label {{ width: 100%; }}
+
+    .progress-row {{ flex-direction: column; align-items: stretch; }}
+    .progress-label {{ flex: 1 1 auto; max-width: none; }}
+    .progress-val {{ text-align: left; }}
+
+    .eval-time-input {{ max-width: 100%; }}
+    .text-input {{ max-width: 100%; }}
+
+    .breakout-slider-row {{ flex-direction: column; align-items: stretch; }}
+    .breakout-slider-track {{ flex: 1 1 auto; width: 100%; }}
+
+    .card:has(> table.data-table),
+    #pred-prob-table,
+    #pred-athlete-summary,
+    #pred-top-winners,
+    #pred-field-table,
+    #pred-top-teams,
+    #pred-team-roster,
+    #eval-content {{
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      max-width: 100%;
+    }}
+
+    .pred-meta-row .push-right {{ margin-left: 0; width: 100%; }}
+
+    .tier-matrix-grid {{
+      grid-template-columns: minmax(1.25rem, 1.75rem) minmax(0, 1fr);
+    }}
+  }}
+
+  @media (max-width: 480px) {{
+    .grid-4 {{ grid-template-columns: minmax(0, 1fr); }}
   }}
 </style>
 </head>
 <body>
-
-<header>
-  <div>
-    <h1>NCAA XC &amp; Distance — Development Dashboard</h1>
-    <p>TFRRS Data Pipeline &nbsp;·&nbsp; Longitudinal Athlete Analytics</p>
-  </div>
-  <div style="text-align:right; color:var(--muted); font-size:12px;">
-    <div id="gen-date"></div>
-  </div>
-</header>
 
 <!-- BUG-05 fixed: pass `this` so showTab can activate the correct button -->
 <nav>
   <button class="active" onclick="showTab('overview',this)">Overview</button>
   <button onclick="showTab('progression',this)">Progression Curves</button>
   <button onclick="showTab('breakout',this)">Breakout Rates</button>
-  <button onclick="showTab('percentiles',this)">Percentile Tables</button>
   <button onclick="showTab('tiers',this)">Tier Transitions</button>
   <button onclick="showTab('evaluator',this)">Evaluator</button>
   <button onclick="showTab('predictor',this)">Predictor</button>
-  <button onclick="showTab('volume',this)">Data Volume</button>
 </nav>
 
 <main>
 
 <!-- ══════ TAB 1 — OVERVIEW ══════ -->
 <div class="tab-pane active" id="tab-overview">
+
+  <div class="info-callout" style="margin-bottom:1.25rem;">
+    <p style="color:var(--text);margin:0;">
+      This site uses historical data limited to NCAA D1 XC and distance results from 2012–2026.
+      Detailed data analysis can be seen under the <strong>Progression Curves</strong>,
+      <strong>Breakout Rates</strong>, and <strong>Tier Transitions</strong> tabs.
+      General career progression simulation is in the <strong>Evaluator</strong> tab;
+      specific athlete or team simulations are under the <strong>Predictor</strong>.
+    </p>
+  </div>
 
   <div class="grid-4">
     <div class="kpi blue">
@@ -566,26 +878,12 @@ def generate_html(data: dict) -> str:
 
   <div class="grid-2">
     <div class="card">
-      <div class="card-title">Performance Curve — Average Time by Class Year</div>
-      <div class="controls">
-        <select id="ov-event-sel" onchange="renderOverviewCurve()"></select>
-        <div class="btn-group">
-          <button id="ov-m-btn" class="active" onclick="setOvGender('M')">Men</button>
-          <button id="ov-f-btn"                onclick="setOvGender('F')">Women</button>
-        </div>
-      </div>
-      <div class="chart-wrap short"><canvas id="chart-curve"></canvas></div>
+      <div class="card-title">Athletes per Season Year</div>
+      <div class="chart-wrap tall"><canvas id="chart-vol-athletes"></canvas></div>
     </div>
     <div class="card">
-      <div class="card-title">Mean % Improvement by Class Transition</div>
-      <div class="controls">
-        <select id="ov-event-sel2" onchange="renderImprovementBar()"></select>
-        <div class="btn-group">
-          <button id="ov2-m-btn" class="active" onclick="setOv2Gender('M')">Men</button>
-          <button id="ov2-f-btn"                onclick="setOv2Gender('F')">Women</button>
-        </div>
-      </div>
-      <div class="chart-wrap short"><canvas id="chart-improvement"></canvas></div>
+      <div class="card-title">Results per Season Year</div>
+      <div class="chart-wrap tall"><canvas id="chart-vol-results"></canvas></div>
     </div>
   </div>
 </div>
@@ -596,10 +894,6 @@ def generate_html(data: dict) -> str:
 
   <div class="controls">
     <select id="prog-event" onchange="renderProgression()"></select>
-    <div class="btn-group">
-      <button id="prog-m-btn" class="active" onclick="setProgGender('M')">Men</button>
-      <button id="prog-f-btn"                onclick="setProgGender('F')">Women</button>
-    </div>
     <div class="btn-group">
       <button id="prog-raw-btn" class="active" onclick="setProgMode('raw')">Raw</button>
       <button id="prog-disc-btn"                onclick="setProgMode('discounted')">Discounted vs. NCAA field</button>
@@ -628,19 +922,21 @@ def generate_html(data: dict) -> str:
 
   <div class="card full">
     <div class="card-title">Progression Summary Table</div>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Transition</th><th>N</th><th>Mean %</th>
-          <th>Median %</th><th>Std Dev</th>
-          <th title="10th percentile of % improvement (bottom 10% of improvers)">P10</th>
-          <th title="25th percentile of % improvement">P25</th>
-          <th title="75th percentile of % improvement">P75</th>
-          <th title="90th percentile of % improvement (top 10% of improvers, not fastest by time)">P90</th>
-        </tr>
-      </thead>
-      <tbody id="prog-table-body"></tbody>
-    </table>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Transition</th><th>N</th><th>Mean %</th>
+            <th>Median %</th><th>Std Dev</th>
+            <th title="10th percentile of % improvement (bottom 10% of improvers)">P10</th>
+            <th title="25th percentile of % improvement">P25</th>
+            <th title="75th percentile of % improvement">P75</th>
+            <th title="90th percentile of % improvement (top 10% of improvers, not fastest by time)">P90</th>
+          </tr>
+        </thead>
+        <tbody id="prog-table-body"></tbody>
+      </table>
+    </div>
   </div>
 
   <div class="section-title" style="margin-top:32px;">NCAA-Wide <span>Progression Over Time</span></div>
@@ -648,15 +944,9 @@ def generate_html(data: dict) -> str:
     How the overall NCAA field's median (P50), P25, and P75 times for this event have shifted
     season to season — independent of any individual athlete's class-year progression.
   </p>
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">Men — National Percentile Times by Season</div>
-      <div class="chart-wrap"><canvas id="chart-yearly-trend-m"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Women — National Percentile Times by Season</div>
-      <div class="chart-wrap"><canvas id="chart-yearly-trend-f"></canvas></div>
-    </div>
+  <div class="card">
+    <div class="card-title">Men — National Percentile Times by Season</div>
+    <div class="chart-wrap"><canvas id="chart-yearly-trend-m"></canvas></div>
   </div>
 </div>
 
@@ -706,14 +996,14 @@ def generate_html(data: dict) -> str:
   <!-- Percentile range slider -->
   <div class="card" style="margin-bottom:20px;">
     <div class="card-title">Filter by Athlete Time Percentile (from-season)</div>
-    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:4px 0;">
-      <span style="font-size:12px;color:var(--muted);white-space:nowrap;">Time percentile range:</span>
-      <span id="br-pct-min-lbl" style="font-size:13px;font-weight:700;color:var(--accent);min-width:110px;white-space:nowrap;">0%</span>
-      <div style="position:relative;flex:1;min-width:160px;height:24px;">
-          <div id="breakout-range-slider" style="flex:1;min-width:300px;"></div>
+    <div class="breakout-slider-row">
+      <span class="muted-note" style="margin:0;white-space:nowrap;">Time percentile range:</span>
+      <span id="br-pct-min-lbl" class="br-pct-lbl min">0%</span>
+      <div class="breakout-slider-track">
+          <div id="breakout-range-slider"></div>
       </div>
-      <span id="br-pct-max-lbl" style="font-size:13px;font-weight:700;color:var(--accent2);min-width:110px;white-space:nowrap;">100%</span>
-      <span id="br-pct-count" style="font-size:12px;color:var(--muted);"></span>
+      <span id="br-pct-max-lbl" class="br-pct-lbl max">100%</span>
+      <span id="br-pct-count" class="muted-note" style="margin:0;"></span>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-top:6px;">
       100% = fastest athletes &nbsp;·&nbsp; 0% = slowest athletes &nbsp;·&nbsp;
@@ -743,19 +1033,9 @@ def generate_html(data: dict) -> str:
     </div>
     <div class="card">
       <div class="card-title">Breakout Probability Heatmap</div>
-      <div id="breakout-heatmap" style="padding:8px;overflow-x:auto;"></div>
+      <div id="breakout-heatmap" class="scroll-panel"></div>
     </div>
   </div>
-</div>
-
-<!-- ══════ TAB 5 — PERCENTILES ══════ -->
-<div class="tab-pane" id="tab-percentiles">
-  <div class="section-title">National <span>Percentile Benchmarks</span></div>
-  <p style="color:var(--muted);margin-bottom:24px;font-size:13px;">
-    Time (MM:SS) required to be at each national percentile across all seasons combined.
-    Lower time = faster. P95 = faster than 95% of the NCAA field.
-  </p>
-  <div id="percentile-tables"></div>
 </div>
 
 <!-- ══════ TAB 6 — TIER TRANSITIONS ══════ -->
@@ -794,7 +1074,7 @@ def generate_html(data: dict) -> str:
 
   <div class="card full">
     <div class="card-title">Decile Transition Matrix (10×10)</div>
-    <div id="tier-matrix" style="padding:8px;overflow-x:auto;"></div>
+    <div id="tier-matrix" class="scroll-panel"></div>
   </div>
 
   <div class="card full">
@@ -838,11 +1118,11 @@ def generate_html(data: dict) -> str:
       <button id="eval-raw-btn" class="active" onclick="setEvalMode('raw')">Raw</button>
       <button id="eval-disc-btn"                onclick="setEvalMode('discounted')">Discounted vs. NCAA field</button>
     </div>
-    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);">
+    <label class="eval-time-label">
       Best time
       <input type="text" id="eval-time" class="eval-time-input" placeholder="16:30.00"
              oninput="renderEvaluator()" value="16:30.00">
-      <span style="font-size:11px;">MM:SS.ss or seconds</span>
+      <span style="font-size:0.6875rem;">MM:SS.ss or seconds</span>
     </label>
   </div>
 
@@ -855,14 +1135,13 @@ def generate_html(data: dict) -> str:
 <div class="tab-pane" id="tab-predictor">
   <div class="section-title">Field <span>Predictor</span></div>
 
-  <div style="margin-bottom:16px;padding:12px 14px;border:1px solid var(--border);border-left:3px solid var(--accent);
-              border-radius:8px;background:var(--surface);font-size:13px;line-height:1.55;">
-    <p style="margin:0 0 8px;color:var(--text);">
+  <div class="info-callout">
+    <p style="color:var(--text);">
       Uses all historical year-over-year progression statistics to project how athletes' season
       bests will progress, then ranks outcomes on both an individual and
       XC team level within the selected conference or region. Each athlete is simulated using tier and class-specific transition rates.
     </p>
-    <p style="margin:0 0 8px;color:var(--muted);font-size:12px;">
+    <p style="color:var(--muted);font-size:0.75rem;">
       <strong style="color:var(--text);">What this does:</strong>
       accounts for different progression by tier  and
       class year; uses each athlete's {current_season} season best
@@ -871,7 +1150,7 @@ def generate_html(data: dict) -> str:
       XC Team mode  — all men's XC is modeled as 8K;
       .
     </p>
-    <p style="margin:0;color:var(--muted);font-size:12px;">
+    <p style="color:var(--muted);font-size:0.75rem;">
       <strong style="color:var(--text);">What this does not do:</strong>
       account for incoming freshmen, transfers, injuries, or roster departures (only returning
       FR/SO/JR with a current-season mark in the database); factor in championship variability,
@@ -879,7 +1158,7 @@ def generate_html(data: dict) -> str:
     </p>
   </div>
 
-  <div class="controls" style="flex-wrap:wrap;gap:10px;">
+  <div class="controls">
     <div class="btn-group">
       <button id="pred-mode-ind-btn" class="active" onclick="setPredMode('individual')">Individual</button>
       <button id="pred-mode-team-btn"                onclick="setPredMode('team')">XC Team</button>
@@ -897,56 +1176,38 @@ def generate_html(data: dict) -> str:
   </div>
 
   <div id="pred-individual-extra">
-    <div style="margin:14px 0 6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-      <input type="text" id="pred-athlete-search" placeholder="Search athlete name..."
-             style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);
-                    background:var(--surface2);color:var(--text);font-size:13px;width:240px;"
+    <div class="pred-search-row">
+      <input type="text" id="pred-athlete-search" class="text-input" placeholder="Search athlete name..."
              oninput="predAthleteSearch(this.value)">
     </div>
 
-    <!-- Athlete dropdown from search -->
-    <div id="pred-athlete-list" style="display:none;max-height:200px;overflow-y:auto;
-         border:1px solid var(--border);border-radius:6px;background:var(--surface2);
-         margin-bottom:12px;font-size:13px;"></div>
+    <div id="pred-athlete-list" class="pred-dropdown"></div>
 
-    <!-- Chosen athlete card -->
-    <div id="pred-chosen-card" style="display:none;margin-bottom:14px;padding:10px 14px;
-         border:1px solid var(--accent);border-radius:8px;background:var(--surface);font-size:13px;">
-    </div>
+    <div id="pred-chosen-card" class="pred-chosen-card"></div>
   </div>
 
-  <div id="pred-team-extra" style="display:none;margin:14px 0 6px;">
-    <p id="pred-team-event-note" style="font-size:13px;color:var(--muted);margin-bottom:8px;"></p>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
-      <input type="text" id="pred-team-search" placeholder="Search school / team name..."
-             style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);
-                    background:var(--surface2);color:var(--text);font-size:13px;width:240px;"
+  <div id="pred-team-extra" style="display:none;">
+    <p id="pred-team-event-note" class="muted-note" style="margin-bottom:0.5rem;"></p>
+    <div class="pred-search-row">
+      <input type="text" id="pred-team-search" class="text-input" placeholder="Search school / team name..."
              oninput="predTeamSearch(this.value)">
     </div>
-    <div id="pred-team-list" style="display:none;max-height:200px;overflow-y:auto;
-         border:1px solid var(--border);border-radius:6px;background:var(--surface2);
-         margin-bottom:12px;font-size:13px;"></div>
-    <div id="pred-chosen-team-card" style="display:none;margin-bottom:14px;padding:10px 14px;
-         border:1px solid var(--accent);border-radius:8px;background:var(--surface);font-size:13px;">
-    </div>
+    <div id="pred-team-list" class="pred-dropdown"></div>
+    <div id="pred-chosen-team-card" class="pred-chosen-card"></div>
   </div>
 
-  <div style="margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-    <span id="pred-field-count" style="font-size:12px;color:var(--muted);"></span>
-    <span id="pred-sims-label"  style="font-size:12px;color:var(--muted);margin-left:auto;">
+  <div class="pred-meta-row">
+    <span id="pred-field-count" class="muted-note" style="margin:0;"></span>
+    <span id="pred-sims-label" class="muted-note push-right" style="margin:0;">
       10,000 simulations
     </span>
   </div>
 
-  <!-- Run button -->
-  <div style="margin-bottom:16px;">
-    <button id="pred-run-btn"
-            style="padding:8px 22px;background:var(--accent);color:#fff;border:none;
-                   border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;"
-            onclick="runMonteCarlo()">
+  <div class="pred-run-row">
+    <button id="pred-run-btn" class="btn-primary" onclick="runMonteCarlo()">
       Run Simulation
     </button>
-    <span id="pred-run-status" style="margin-left:12px;font-size:12px;color:var(--muted);"></span>
+    <span id="pred-run-status" class="muted-note" style="margin:0;"></span>
   </div>
 
   <!-- Results -->
@@ -1023,21 +1284,6 @@ def generate_html(data: dict) -> str:
   </div>
 </div>
 
-<div class="tab-pane" id="tab-volume">
-  <div class="section-title">Data <span>Volume</span></div>
-
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">Athletes per Season Year</div>
-      <div class="chart-wrap tall"><canvas id="chart-vol-athletes"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Results per Season Year</div>
-      <div class="chart-wrap tall"><canvas id="chart-vol-results"></canvas></div>
-    </div>
-  </div>
-</div>
-
 </main>
 
 <script>
@@ -1045,8 +1291,6 @@ def generate_html(data: dict) -> str:
 const DATA = {d};
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let ovGender   = 'M';
-let ov2Gender  = 'M';
 let progGender = 'M';
 let brGender   = 'M';
 let tierGender = 'M';
@@ -1171,10 +1415,8 @@ function showTab(name, btn) {{
   if (name === 'progression') renderProgression();
   if (name === 'attrition')   renderAttrition();
   if (name === 'breakout')    renderBreakout();
-  if (name === 'percentiles') renderPercentiles();
   if (name === 'tiers')       renderTierTab();
   if (name === 'evaluator')   renderEvaluator();
-  if (name === 'volume')      renderVolume();
   if (name === 'predictor')   initPredictor();
 }}
 
@@ -1814,6 +2056,7 @@ function renderPredictorResults({{ hasChosen, placeCounts, chosenPlaces, chosenT
 
     const targets = [1, 3, 6, 10, Math.ceil(n / 2)].filter((v, i, a) => v <= n && a.indexOf(v) === i);
     document.getElementById('pred-prob-table').innerHTML = `
+      <div class="table-scroll">
       <table class="data-table">
         <thead><tr>
           ${{targets.map(t => `<th style="text-align:center;">Top ${{t}}</th>`).join('')}}
@@ -1828,7 +2071,8 @@ function renderPredictorResults({{ hasChosen, placeCounts, chosenPlaces, chosenT
             ${{(placeCounts[0] / N_SIMS * 100).toFixed(1)}}%
           </td>
         </tr></tbody>
-      </table>`;
+      </table>
+      </div>`;
 
     const p10Time  = predPctile(chosenTimes, 0.10);
     const p90Time  = predPctile(chosenTimes, 0.90);
@@ -1838,6 +2082,7 @@ function renderPredictorResults({{ hasChosen, placeCounts, chosenPlaces, chosenT
     const avgPlace  = predAvg(chosenPlaces);
 
     document.getElementById('pred-athlete-summary').innerHTML = `
+      <div class="table-scroll">
       <table class="data-table">
         <thead><tr>
           <th></th>
@@ -1867,6 +2112,7 @@ function renderPredictorResults({{ hasChosen, placeCounts, chosenPlaces, chosenT
           </tr>
         </tbody>
       </table>
+      </div>
       <div style="margin-top:8px;font-size:11px;color:var(--muted);">
         ${{EVENT_LABELS[event_code] || event_code}} · ${{chosenAth.class_year}} ·
         ${{TRANS_LABELS[chosenAth.transition] || chosenAth.transition || ''}} ·
@@ -1889,6 +2135,7 @@ function renderPredictorResults({{ hasChosen, placeCounts, chosenPlaces, chosenT
       .slice(0, 15);
 
     document.getElementById('pred-top-winners').innerHTML = `
+      <div class="table-scroll">
       <table class="data-table">
         <thead><tr>
           <th>#</th><th>Athlete</th><th>School</th><th>Yr</th>
@@ -1905,7 +2152,8 @@ function renderPredictorResults({{ hasChosen, placeCounts, chosenPlaces, chosenT
               <td class="num">${{secToMMSS(ath.medianTime)}}</td>
             </tr>`).join('')}}
         </tbody>
-      </table>`;
+      </table>
+      </div>`;
   }}
 
   if (!hasChosen) {{
@@ -1914,6 +2162,7 @@ function renderPredictorResults({{ hasChosen, placeCounts, chosenPlaces, chosenT
       .sort((a, b) => a.medianTime - b.medianTime);
 
     document.getElementById('pred-field-table').innerHTML = `
+      <div class="table-scroll">
       <table class="data-table">
         <thead><tr>
           <th>#</th><th>Athlete</th><th>School</th><th>Transition</th>
@@ -1935,7 +2184,8 @@ function renderPredictorResults({{ hasChosen, placeCounts, chosenPlaces, chosenT
             </tr>`;
           }}).join('')}}
         </tbody>
-      </table>`;
+      </table>
+      </div>`;
   }}
 }}
 
@@ -2037,6 +2287,7 @@ function renderTeamPredictorResults({{ hasChosenTeam, chosenSchool, teamPlaces, 
 
     const targets = [1, 3, 5, 8].filter(t => t <= nTeams);
     document.getElementById('pred-prob-table').innerHTML = `
+      <div class="table-scroll">
       <table class="data-table">
         <thead><tr>
           ${{targets.map(t => `<th style="text-align:center;">Top ${{t}}</th>`).join('')}}
@@ -2051,7 +2302,8 @@ function renderTeamPredictorResults({{ hasChosenTeam, chosenSchool, teamPlaces, 
             ${{(placeCounts[0] / N_SIMS * 100).toFixed(1)}}%
           </td>
         </tr></tbody>
-      </table>`;
+      </table>
+      </div>`;
 
     const p10Rank  = predPctile(places, 0.10);
     const p90Rank  = predPctile(places, 0.90);
@@ -2061,6 +2313,7 @@ function renderTeamPredictorResults({{ hasChosenTeam, chosenSchool, teamPlaces, 
     const avgScore   = predAvg(scores);
 
     document.getElementById('pred-athlete-summary').innerHTML = `
+      <div class="table-scroll">
       <table class="data-table">
         <thead><tr>
           <th></th>
@@ -2090,6 +2343,7 @@ function renderTeamPredictorResults({{ hasChosenTeam, chosenSchool, teamPlaces, 
           </tr>
         </tbody>
       </table>
+      </div>
       <div style="margin-top:8px;font-size:11px;color:var(--muted);">
         ${{EVENT_LABELS[event_code] || event_code}} · top-${{PRED_TEAM_SCORERS}} place scoring ·
         ${{N_SIMS.toLocaleString()}} runs
@@ -2097,6 +2351,7 @@ function renderTeamPredictorResults({{ hasChosenTeam, chosenSchool, teamPlaces, 
 
     const roster = teamAthleteStats || [];
     document.getElementById('pred-team-roster').innerHTML = roster.length ? `
+      <div class="table-scroll">
       <table class="data-table">
         <thead><tr>
           <th>#</th><th>Athlete</th><th>Transition</th>
@@ -2115,7 +2370,8 @@ function renderTeamPredictorResults({{ hasChosenTeam, chosenSchool, teamPlaces, 
               <td class="num" style="color:${{ath.scorerPct >= 80 ? 'var(--good)' : ath.scorerPct >= 40 ? 'var(--text)' : 'var(--muted)'}}">${{ath.scorerPct.toFixed(1)}}%</td>
             </tr>`).join('')}}
         </tbody>
-      </table>` : `<p style="font-size:13px;color:var(--muted);">No athletes on this team in the current field.</p>`;
+      </table>
+      </div>` : `<p style="font-size:13px;color:var(--muted);">No athletes on this team in the current field.</p>`;
     return;
   }}
 
@@ -2127,6 +2383,7 @@ function renderTeamPredictorResults({{ hasChosenTeam, chosenSchool, teamPlaces, 
   const topTeams = [...teams].sort((a, b) => b.winPct - a.winPct || a.avgRank - b.avgRank).slice(0, 15);
 
   document.getElementById('pred-top-teams').innerHTML = `
+    <div class="table-scroll">
     <table class="data-table">
       <thead><tr>
         <th>#</th><th>School</th>
@@ -2142,9 +2399,11 @@ function renderTeamPredictorResults({{ hasChosenTeam, chosenSchool, teamPlaces, 
             <td class="num">${{t.avgScore != null ? t.avgScore.toFixed(1) : '—'}}</td>
           </tr>`).join('')}}
       </tbody>
-    </table>`;
+    </table>
+    </div>`;
 
   document.getElementById('pred-team-table').innerHTML = `
+    <div class="table-scroll">
     <table class="data-table">
       <thead><tr>
         <th>#</th><th>School</th>
@@ -2167,6 +2426,7 @@ function renderTeamPredictorResults({{ hasChosenTeam, chosenSchool, teamPlaces, 
           </tr>`).join('')}}
       </tbody>
     </table>
+    </div>
     <div style="margin-top:8px;font-size:11px;color:var(--muted);">
       ${{EVENT_LABELS[event_code] || event_code}} · ${{N_SIMS.toLocaleString()}} simulations ·
       ${{teams.length}} scoring teams (≥${{PRED_TEAM_SCORERS}} athletes)
@@ -2187,15 +2447,13 @@ function secToMMSS(s) {{
 //  OVERVIEW
 // ══════════════════════════════════════════════════════════════════════════════
 function initOverview() {{
-  ['ov-event-sel','ov-event-sel2','prog-event','br-event','tier-event','eval-event'].forEach(populateEventSelect);
+  ['prog-event','br-event','tier-event','eval-event'].forEach(populateEventSelect);
 
   const s = DATA.summary;
   document.getElementById('kpi-athletes').textContent = s.athletes.toLocaleString();
   document.getElementById('kpi-results').textContent  = s.results.toLocaleString();
   document.getElementById('kpi-schools').textContent  = s.schools.toLocaleString();
   document.getElementById('kpi-seasons').textContent  = s.seasons.toLocaleString();
-  document.getElementById('gen-date').textContent =
-    new Date().toLocaleDateString('en-US', {{ dateStyle: 'long' }});
 
   // Results by event
   const ev = DATA.event_counts;
@@ -2234,137 +2492,41 @@ function initOverview() {{
     }});
   }}
 
-  renderOverviewCurve();
-  renderImprovementBar();
-}}
-
-function setOvGender(g) {{
-  ovGender = g;
-  document.getElementById('ov-m-btn').classList.toggle('active', g === 'M');
-  document.getElementById('ov-f-btn').classList.toggle('active', g === 'F');
-  renderOverviewCurve();
-}}
-function setOv2Gender(g) {{
-  ov2Gender = g;
-  document.getElementById('ov2-m-btn').classList.toggle('active', g === 'M');
-  document.getElementById('ov2-f-btn').classList.toggle('active', g === 'F');
-  renderImprovementBar();
-}}
-
-function renderOverviewCurve() {{
-  const event = document.getElementById('ov-event-sel').value;
-  const rows  = rowsForEvent(DATA.class_performance, event, ovGender);
-  rows.sort((a, b) => CLASS_ORDER.indexOf(a.class_year) - CLASS_ORDER.indexOf(b.class_year));
-
-  if (!rows.length) {{
-    mkChart('chart-curve', {{
+  const vol = DATA.season_volume || [];
+  if (vol.length) {{
+    const labels = vol.map(r => r.year);
+    mkChart('chart-vol-athletes', {{
       type: 'bar',
-      data: {{ labels: ['No data'], datasets: [{{ data: [0] }}] }},
-      options: {{ ...baseOpts(false), plugins: {{ legend: {{ display: false }}, title: {{
-        display: true, text: `No class-year data for ${{EVENT_LABELS[event] || event}} (${{ovGender === 'M' ? 'Men' : 'Women'}})`,
-        color: tickColor, font: baseFont
-      }} }} }}
+      data: {{
+        labels,
+        datasets: [{{
+          label: 'Unique Athletes',
+          data: vol.map(r => r.athletes),
+          backgroundColor: 'rgba(0,200,255,0.6)', borderColor: '#00c8ff',
+          borderWidth: 1, borderRadius: 4
+        }}]
+      }},
+      options: baseOpts(false)
     }});
-    return;
-  }}
-
-  mkChart('chart-curve', {{
-    type: 'line',
-    data: {{
-      labels: rows.map(r => r.class_year),
-      datasets: [
-        {{
-          label: 'Avg Time',
-          data: rows.map(r => r.avg_time),
-          borderColor: '#00c8ff', backgroundColor: 'rgba(0,200,255,0.1)',
-          tension: 0.4, fill: true, pointRadius: 5, pointBackgroundColor: '#00c8ff'
-        }},
-        {{
-          label: 'Best Time',
-          data: rows.map(r => r.best_time),
-          borderColor: '#7fff6e', backgroundColor: 'rgba(127,255,110,0.05)',
-          tension: 0.4, borderDash: [4,4], pointRadius: 4, pointBackgroundColor: '#7fff6e'
-        }}
-      ]
-    }},
-    options: {{
-      ...baseOpts(true),
-      scales: {{
-        x: {{ grid: {{ color: gridColor }}, ticks: {{ color: tickColor, font: baseFont }} }},
-        y: {{
-          grid: {{ color: gridColor }},
-          // reverse: true → lowest time (fastest) at top — correct for running
-          reverse: true,
-          ticks: {{ color: tickColor, font: baseFont, callback: v => fmtTime(v) }}
-        }}
-      }}
-    }}
-  }});
-}}
-
-// BUG-07 fixed: removed misleading Std Dev bar; show mean only with annotation note
-function renderImprovementBar() {{
-  const event = document.getElementById('ov-event-sel2').value;
-  const rows  = rowsForEvent(DATA.progression, event, ov2Gender);
-  rows.sort((a, b) => CLASS_ORDER.indexOf(a.from_class) - CLASS_ORDER.indexOf(b.from_class));
-
-  if (!rows.length) {{
-    mkChart('chart-improvement', {{
+    mkChart('chart-vol-results', {{
       type: 'bar',
-      data: {{ labels: ['No data'], datasets: [{{ data: [0] }}] }},
-      options: {{ ...baseOpts(false), plugins: {{ legend: {{ display: false }}, title: {{
-        display: true, text: `No progression data for ${{EVENT_LABELS[event] || event}} (${{ov2Gender === 'M' ? 'Men' : 'Women'}})`,
-        color: tickColor, font: baseFont
-      }} }} }}
+      data: {{
+        labels,
+        datasets: [{{
+          label: 'Total Results',
+          data: vol.map(r => r.results),
+          backgroundColor: 'rgba(255,107,53,0.6)', borderColor: '#ff6b35',
+          borderWidth: 1, borderRadius: 4
+        }}]
+      }},
+      options: baseOpts(false)
     }});
-    return;
   }}
-
-  const labels = rows.map(r =>
-    TRANS_LABELS[r.from_class + '_to_' + r.to_class] || r.from_class + '→' + r.to_class
-  );
-  const means = rows.map(r => r.mean != null ? parseFloat(Number(r.mean).toFixed(2)) : null);
-
-  mkChart('chart-improvement', {{
-    type: 'bar',
-    data: {{
-      labels,
-      datasets: [{{
-        label: 'Mean Improvement %',
-        data: means,
-        backgroundColor: means.map(v => v != null && v >= 0
-          ? 'rgba(34,211,160,0.7)' : 'rgba(248,113,113,0.7)'),
-        borderColor: means.map(v => v != null && v >= 0 ? '#22d3a0' : '#f87171'),
-        borderWidth: 1, borderRadius: 4
-      }}]
-    }},
-    options: {{
-      ...baseOpts(false),
-      plugins: {{
-        ...baseOpts(false).plugins,
-        tooltip: {{
-          callbacks: {{
-            afterLabel: ctx => {{
-              const r = rows[ctx.dataIndex];
-              return r && r.std != null ? `Std Dev: ±${{Number(r.std).toFixed(2)}}%` : '';
-            }}
-          }}
-        }}
-      }}
-    }}
-  }});
 }}
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  PROGRESSION
 // ══════════════════════════════════════════════════════════════════════════════
-function setProgGender(g) {{
-  progGender = g;
-  document.getElementById('prog-m-btn').classList.toggle('active', g === 'M');
-  document.getElementById('prog-f-btn').classList.toggle('active', g === 'F');
-  renderProgression();
-}}
-
 let progMode = 'raw'; // 'raw' | 'discounted'
 function setProgMode(mode) {{
   progMode = mode;
@@ -2461,54 +2623,52 @@ function renderProgression() {{
 
 // NCAA-wide percentile time trends by season for the selected event.
 function renderYearlyTrends(event) {{
-  ['m', 'f'].forEach(g => {{
-    const gender = g === 'm' ? 'M' : 'F';
-    const yt = DATA.yearly_trends || {{}};
-    const code = firstEventKey(yt, event);
-    const rows = (yt[code] && yt[code][gender]) || [];
-    const canvasId = `chart-yearly-trend-${{g}}`;
+  const gender = 'M';
+  const yt = DATA.yearly_trends || {{}};
+  const code = firstEventKey(yt, event);
+  const rows = (yt[code] && yt[code][gender]) || [];
+  const canvasId = 'chart-yearly-trend-m';
 
-    if (!rows.length) {{
-      mkChart(canvasId, {{
-        type: 'line',
-        data: {{ labels: ['No data'], datasets: [{{ data: [null] }}] }},
-        options: {{ ...baseOpts(false), plugins: {{ legend: {{ display: false }}, title: {{
-          display: true, text: `No yearly data for ${{EVENT_LABELS[event] || event}} (${{gender === 'M' ? 'Men' : 'Women'}})`,
-          color: tickColor, font: baseFont
-        }} }} }}
-      }});
-      return;
-    }}
-
+  if (!rows.length) {{
     mkChart(canvasId, {{
       type: 'line',
-      data: {{
-        labels: rows.map(r => r.year),
-        datasets: [
-          {{ label: 'P25 (slower quartile)', data: rows.map(r => r.p25 ?? null), borderColor: '#7fff6e', backgroundColor: 'rgba(127,255,110,0.08)', tension: 0.3, pointRadius: 3 }},
-          {{ label: 'Median (P50)',          data: rows.map(r => r.p50 ?? null), borderColor: '#00c8ff', backgroundColor: 'rgba(0,200,255,0.1)',   tension: 0.3, pointRadius: 4, borderWidth: 2 }},
-          {{ label: 'P75 (faster quartile)', data: rows.map(r => r.p75 ?? null), borderColor: '#fbbf24', backgroundColor: 'rgba(251,191,36,0.08)', tension: 0.3, pointRadius: 3 }},
-        ]
+      data: {{ labels: ['No data'], datasets: [{{ data: [null] }}] }},
+      options: {{ ...baseOpts(false), plugins: {{ legend: {{ display: false }}, title: {{
+        display: true, text: `No yearly data for ${{EVENT_LABELS[event] || event}} (Men)`,
+        color: tickColor, font: baseFont
+      }} }} }}
+    }});
+    return;
+  }}
+
+  mkChart(canvasId, {{
+    type: 'line',
+    data: {{
+      labels: rows.map(r => r.year),
+      datasets: [
+        {{ label: 'P25 (slower quartile)', data: rows.map(r => r.p25 ?? null), borderColor: '#7fff6e', backgroundColor: 'rgba(127,255,110,0.08)', tension: 0.3, pointRadius: 3 }},
+        {{ label: 'Median (P50)',          data: rows.map(r => r.p50 ?? null), borderColor: '#00c8ff', backgroundColor: 'rgba(0,200,255,0.1)',   tension: 0.3, pointRadius: 4, borderWidth: 2 }},
+        {{ label: 'P75 (faster quartile)', data: rows.map(r => r.p75 ?? null), borderColor: '#fbbf24', backgroundColor: 'rgba(251,191,36,0.08)', tension: 0.3, pointRadius: 3 }},
+      ]
+    }},
+    options: {{
+      ...baseOpts(true),
+      plugins: {{
+        ...baseOpts(true).plugins,
+        tooltip: {{
+          backgroundColor: '#1a2235', titleColor: '#e2e8f0', bodyColor: '#94a3b8',
+          callbacks: {{ label: ctx => ` ${{ctx.dataset.label}}: ${{fmtTime(ctx.raw)}}` }}
+        }}
       }},
-      options: {{
-        ...baseOpts(true),
-        plugins: {{
-          ...baseOpts(true).plugins,
-          tooltip: {{
-            backgroundColor: '#1a2235', titleColor: '#e2e8f0', bodyColor: '#94a3b8',
-            callbacks: {{ label: ctx => ` ${{ctx.dataset.label}}: ${{fmtTime(ctx.raw)}}` }}
-          }}
-        }},
-        scales: {{
-          x: {{ grid: {{ color: gridColor }}, ticks: {{ color: tickColor, font: baseFont }} }},
-          y: {{
-            grid: {{ color: gridColor }},
-            reverse: true,
-            ticks: {{ color: tickColor, font: baseFont, callback: v => fmtTime(v) }}
-          }}
+      scales: {{
+        x: {{ grid: {{ color: gridColor }}, ticks: {{ color: tickColor, font: baseFont }} }},
+        y: {{
+          grid: {{ color: gridColor }},
+          reverse: true,
+          ticks: {{ color: tickColor, font: baseFont, callback: v => fmtTime(v) }}
         }}
       }}
-    }});
+    }}
   }});
 }}
 
@@ -2763,61 +2923,6 @@ function renderBreakout() {{
       Thresholds: ${{thresholds_s.map(fmtSec).join(' · ')}} — derived from the ${{brGender === 'M' ? "men's" : "women's"}} P50 median time for ${{EVENT_LABELS[event] || event}}.
       ${{isFiltered ? ` · Filtered to percentile ${{minPct}}–${{maxPct}}%.` : ''}}
     </div>`;
-}}
-
-// ══════════════════════════════════════════════════════════════════════════════
-//  PERCENTILES
-// ══════════════════════════════════════════════════════════════════════════════
-function renderPercentiles() {{
-  const pct    = DATA.percentiles || {{}};
-  const el     = document.getElementById('percentile-tables');
-  const pctKeys   = ['p5','p10','p25','p50','p75','p90','p95'];
-  const pctLabels = ['P5 (slow)','P10','P25','Median','P75','P90','P95 (elite)'];
-  const pctColors = ['#f87171','#fb923c','#fbbf24','#94a3b8','#34d399','#22d3a0','#00c8ff'];
-
-  if (!Object.keys(pct).length) {{
-    el.innerHTML = '<div class="empty-state">No percentile data available</div>';
-    return;
-  }}
-
-  el.innerHTML = Object.entries(pct).map(([event, genders]) => {{
-    return `<div class="card" style="margin-bottom:24px;">
-      <div class="card-title">${{event}}</div>
-      ${{Object.entries(genders).map(([gender, vals]) => {{
-        const ruler = pctKeys.map((k, i) => {{
-          const t = vals[k];
-          return `<div class="pct-seg" style="background:${{pctColors[i]}};font-size:10px;">${{fmtTime(t)}}</div>`;
-        }}).join('');
-        return `
-          <div style="margin-bottom:16px;">
-            <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px;letter-spacing:1px;">
-              ${{gender === 'M' ? 'MEN' : 'WOMEN'}}
-            </div>
-            <div class="pct-ruler">${{ruler}}</div>
-            <div style="display:flex;">
-              ${{pctLabels.map((l, i) =>
-                `<div style="flex:1;text-align:center;font-size:9px;color:${{pctColors[i]}};letter-spacing:0.5px;">${{l}}</div>`
-              ).join('')}}
-            </div>
-          </div>`;
-      }}).join('')}}
-      <table class="data-table" style="margin-top:16px;">
-        <thead><tr>
-          <th>Gender</th>
-          ${{pctLabels.map((l, i) => `<th style="color:${{pctColors[i]}}">${{l}}</th>`).join('')}}
-        </tr></thead>
-        <tbody>
-          ${{Object.entries(genders).map(([gender, vals]) => `
-            <tr>
-              <td><strong>${{gender === 'M' ? 'Men' : 'Women'}}</strong></td>
-              ${{pctKeys.map((k, i) =>
-                `<td class="num" style="color:${{pctColors[i]}}">${{fmtTime(vals[k])}}</td>`
-              ).join('')}}
-            </tr>`).join('')}}
-        </tbody>
-      </table>
-    </div>`;
-  }}).join('');
 }}
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -3304,6 +3409,7 @@ function renderEvaluator() {{
     nextTable = '<div class="empty-state">No historical transition data for the next class year.</div>';
   }} else {{
     nextTable = `
+      <div class="table-scroll">
       <table class="data-table">
         <thead><tr>
           <th>Scenario</th>
@@ -3328,6 +3434,7 @@ function renderEvaluator() {{
           }}).join('')}}
         </tbody>
       </table>
+      </div>
       <div style="margin-top:8px;font-size:11px;color:var(--muted);">
         Rates for athletes starting in decile D${{startDecile}} on ${{startClass}}→${{nextClass}}
         · n=${{nextDecileN != null ? Number(nextDecileN).toLocaleString() : '—'}} in this decile bucket
@@ -3340,6 +3447,7 @@ function renderEvaluator() {{
     careerTable = '<div class="empty-state">No further class transitions available from this year.</div>';
   }} else {{
     careerTable = `
+      <div class="table-scroll">
       <table class="data-table">
         <thead><tr>
           <th>Scenario</th>
@@ -3366,6 +3474,7 @@ function renderEvaluator() {{
           }}).join('')}}
         </tbody>
       </table>
+      </div>
       <div style="margin-top:8px;font-size:11px;color:var(--muted);">
         Career path: ${{startClass}}→${{careerCols.join('→')}} · decile-specific rates per step (re-estimated after each year)
         · ${{evalMode === 'discounted' ? 'field-adjusted' : 'raw'}} improvement %
@@ -3407,43 +3516,6 @@ function renderEvaluator() {{
     </div>`;
 }}
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  VOLUME
-// ══════════════════════════════════════════════════════════════════════════════
-function renderVolume() {{
-  const vol = DATA.season_volume || [];
-  if (!vol.length) return;
-  const labels = vol.map(r => r.year);
-
-  mkChart('chart-vol-athletes', {{
-    type: 'bar',
-    data: {{
-      labels,
-      datasets: [{{
-        label: 'Unique Athletes',
-        data: vol.map(r => r.athletes),
-        backgroundColor: 'rgba(0,200,255,0.6)', borderColor: '#00c8ff',
-        borderWidth: 1, borderRadius: 4
-      }}]
-    }},
-    options: baseOpts(false)
-  }});
-
-  mkChart('chart-vol-results', {{
-    type: 'bar',
-    data: {{
-      labels,
-      datasets: [{{
-        label: 'Total Results',
-        data: vol.map(r => r.results),
-        backgroundColor: 'rgba(255,107,53,0.6)', borderColor: '#ff6b35',
-        borderWidth: 1, borderRadius: 4
-      }}]
-    }},
-    options: baseOpts(false)
-  }});
-}}
-
 // ── Boot ──────────────────────────────────────────────────────────────────────
 initOverview();
 initBreakoutSlider();
@@ -3453,6 +3525,11 @@ initBreakoutSlider();
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Generate NCAA development dashboard HTML")
+    parser.add_argument("--no-open", action="store_true", help="Do not open the dashboard in a browser")
+    args = parser.parse_args()
+
     print("Loading data from database...")
     data = load_data()
 
@@ -3466,13 +3543,18 @@ def main():
     OUTPUT_PATH.parent.mkdir(exist_ok=True)
     OUTPUT_PATH.write_text(html, encoding="utf-8")
 
+    DOCS_PATH.parent.mkdir(exist_ok=True)
+    DOCS_PATH.write_text(html, encoding="utf-8")
+
     size_kb = OUTPUT_PATH.stat().st_size // 1024
     print(f"Dashboard written to: {OUTPUT_PATH}  ({size_kb} KB)")
-    print("Opening in browser...")
-    try:
-        webbrowser.open(OUTPUT_PATH.as_uri())
-    except Exception:
-        print(f"Open manually: {OUTPUT_PATH}")
+    print(f"GitHub Pages copy:    {DOCS_PATH}")
+    if not args.no_open:
+        print("Opening in browser...")
+        try:
+            webbrowser.open(OUTPUT_PATH.as_uri())
+        except Exception:
+            print(f"Open manually: {OUTPUT_PATH}")
 
 
 if __name__ == "__main__":

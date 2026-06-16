@@ -130,14 +130,47 @@ python visulaize.py
 
 `predict_monticarlo.py` reads `tfrrs.db`, `rating_transitions.json`, `percentile_tables.json`, and the two NCAA XC CSV files. Default current season is **2026** (`CURRENT_SEASON` in `predict_monticarlo.py`).
 
-Open `output/dashboard.html` in a browser (no server required).
+Open `output/dashboard.html` in a browser (no server required). The same file is also written to `docs/index.html` for GitHub Pages.
 
 ### Optional flags
 
 ```bash
 python predict_monticarlo.py --season 2026
 python predict_monticarlo.py --conf-map ncaa_d1_xc_teams.csv --region-map ncaa_d1_xc_teams_by_region.csv
+python visulaize.py --no-open
 ```
+
+---
+
+## GitHub Pages deployment
+
+The dashboard is a single self-contained HTML file. Enable Pages from the `/docs` folder on `main`.
+
+### One-time GitHub setup
+
+1. Push the repo to GitHub.
+2. **Settings → Pages → Build from branch `main`, folder `/docs`**.
+3. Site URL: `https://<username>.github.io/data-accuracy/`
+
+### Publish or refresh the site
+
+```bash
+python predict_monticarlo.py   # if MC / Predictor data changed
+python visulaize.py --no-open
+git add docs/index.html
+git commit -m "Update dashboard"
+git push
+```
+
+`docs/index.html` is the only deploy artifact (~13 MB). Do not commit `tfrrs.db`, `raw_html/`, or `output/`.
+
+### Local preview
+
+```bash
+python -m http.server 8080 --directory docs
+```
+
+The dashboard includes responsive CSS for phones and tablets (scrollable nav, stacked grids, scrollable tables).
 
 ---
 
