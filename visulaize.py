@@ -579,6 +579,32 @@ def generate_html(data: dict) -> str:
     max-width: 100%;
   }}
 
+  table.tier-matrix-data {{
+    font-size: 0.75rem;
+  }}
+  table.tier-matrix-data th,
+  table.tier-matrix-data td {{
+    padding: 0.375rem 0.5rem;
+  }}
+  table.tier-matrix-data td.tier-matrix-val {{
+    text-align: center;
+    border-radius: 0.25rem;
+  }}
+  table.tier-matrix-data th.tier-matrix-col {{
+    text-align: center;
+    min-width: 4.5rem;
+  }}
+  table.tier-matrix-data th.tier-matrix-avg,
+  table.tier-matrix-data td.tier-matrix-avg {{
+    text-align: center;
+    min-width: 3.5rem;
+  }}
+  table.tier-matrix-data td.tier-matrix-row-hdr {{
+    font-weight: 700;
+    white-space: nowrap;
+  }}
+  .tier-decile-short {{ display: none; }}
+
   .eval-time-label {{
     display: flex;
     align-items: center;
@@ -805,8 +831,41 @@ def generate_html(data: dict) -> str:
 
     .pred-meta-row .push-right {{ margin-left: 0; width: 100%; }}
 
+    .tier-matrix-axis-top,
+    .tier-matrix-axis-left {{
+      display: none;
+    }}
     .tier-matrix-grid {{
-      grid-template-columns: minmax(1.25rem, 1.75rem) minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.25rem;
+    }}
+    .tier-matrix-table {{
+      grid-column: 1;
+      grid-row: auto;
+    }}
+    .tier-decile-full {{ display: none; }}
+    .tier-decile-short {{ display: inline; }}
+    table.tier-matrix-data {{
+      font-size: 0.625rem;
+    }}
+    table.tier-matrix-data th,
+    table.tier-matrix-data td {{
+      padding: 0.15rem 0.3rem;
+    }}
+    table.tier-matrix-data th.tier-matrix-col {{
+      min-width: 2rem;
+    }}
+    table.tier-matrix-data th.tier-matrix-avg,
+    table.tier-matrix-data td.tier-matrix-avg {{
+      min-width: 2.25rem;
+    }}
+    table.tier-matrix-data td.tier-matrix-row-hdr {{
+      padding-left: 0.2rem;
+      padding-right: 0.35rem;
+    }}
+    table.tier-matrix-data th.tier-matrix-corner {{
+      min-width: 1.25rem;
+      padding: 0.1rem;
     }}
   }}
 
@@ -2989,6 +3048,11 @@ function tierDecileLabel(event, gender, d) {{
   return t != null ? `D${{d}} (${{fmtTime(t)}})` : `D${{d}}`;
 }}
 
+function tierDecileHeader(event, gender, d) {{
+  const full = tierDecileLabel(event, gender, d);
+  return `<span class="tier-decile-full">${{full}}</span><span class="tier-decile-short">D${{d}}</span>`;
+}}
+
 function tierImprovements(block) {{
   return (tierMode === 'discounted' && block.improvements_discounted?.length)
     ? block.improvements_discounted
@@ -3068,26 +3132,26 @@ function renderTierMatrix() {{
       <div class="tier-matrix-axis-top">Ending year</div>
       <div class="tier-matrix-axis-left">Starting year</div>
       <div class="tier-matrix-table">
-        <table class="data-table tier-matrix-table" style="font-size:12px;">
+        <table class="data-table tier-matrix-data">
           <thead><tr>
-            <th style="min-width:24px;"></th>
+            <th class="tier-matrix-corner"></th>
             ${{deciles.map(d =>
-              `<th style="text-align:center;min-width:72px;" title="Ending decile benchmark time">${{tierDecileLabel(event, tierGender, d)}}</th>`
+              `<th class="tier-matrix-col" title="Ending decile benchmark time">${{tierDecileHeader(event, tierGender, d)}}</th>`
             ).join('')}}
-            <th style="text-align:center;min-width:88px;" title="Mean % time change for athletes starting in this decile">Avg Δ%</th>
+            <th class="tier-matrix-avg" title="Mean % time change for athletes starting in this decile">Avg Δ%</th>
           </tr></thead>
           <tbody>
             ${{deciles.map(fromD => {{
               const fromKey = String(fromD);
               const rowMean = meanImp[fromKey];
               return `<tr>
-                <td style="font-weight:700;white-space:nowrap;">${{tierDecileLabel(event, tierGender, fromD)}}</td>
+                <td class="tier-matrix-row-hdr">${{tierDecileHeader(event, tierGender, fromD)}}</td>
                 ${{deciles.map(toD => {{
                   const toKey = String(toD);
                   const v = (matrix[fromKey] || {{}})[toKey] || 0;
-                  return `<td style="text-align:center;border-radius:4px;${{tierCellStyle(v, fromKey, toKey)}}" title="P(to D${{toD}} | from D${{fromD}})">${{v > 0 ? (v * 100).toFixed(1) + '%' : '—'}}</td>`;
+                  return `<td class="tier-matrix-val" style="${{tierCellStyle(v, fromKey, toKey)}}" title="P(to D${{toD}} | from D${{fromD}})">${{v > 0 ? (v * 100).toFixed(1) + '%' : '—'}}</td>`;
                 }}).join('')}}
-                <td style="text-align:center;border-radius:4px;${{tierImpStyle(rowMean)}}">${{rowMean != null ? fmtPct(rowMean) : '—'}}</td>
+                <td class="tier-matrix-val tier-matrix-avg" style="${{tierImpStyle(rowMean)}}">${{rowMean != null ? fmtPct(rowMean) : '—'}}</td>
               </tr>`;
             }}).join('')}}
           </tbody>
